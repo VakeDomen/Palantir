@@ -4,3 +4,17 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+iced = { version = "0.12", features = ["tokio"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+reqwest = { version = "0.12", features = ["json", "multipart", "stream"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rfd = "0.14"
+walkdir = "2"
+zip = { version = "0.6", default-features = false, features = ["deflate"] }
+sha2 = "0.10"
+base64 = "0.22"
+anyhow = "1"
+time = { version = "0.3", features = ["formatting"] }
+hex = "0.4"
+urlencoding = "2"
