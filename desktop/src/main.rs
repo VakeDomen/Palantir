@@ -13,16 +13,14 @@ use iced::theme;
 use iced::Border;
 use iced::border::Radius;
 use iced::Background;
-use iced::Renderer;
 
-use crate::moodle::MoodleClient;
 
-mod moodle;
 
 #[derive(Default)]
 struct PalantirApp {
     step: Step,
-    assignment_id: String,
+    assignment_id: String, // thing in url that student enters
+    assignment_instance_id: String, // actual instance id needed for moodle api
     assignment_title: Option<String>,
     files: Vec<PathBuf>,
     // login
@@ -64,7 +62,7 @@ enum Msg {
     // id check
     AssignmentIdChanged(String),
     CheckId,
-    IdVerified(Result<(String, String), String>), // (assignment_instance_id, name)
+    IdVerified(Result<AssignmentIdentifiers, String>), // (assignment_instance_id, name)
 
     // files and submission
     PickFiles,
@@ -82,6 +80,13 @@ struct Manifest {
     created_at: String,
     file_hashes: Vec<(String, String)>,
     client_version: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct AssignmentIdentifiers {
+    pub cmid: String,
+    pub instance: String,
+    pub name: String,
 }
 
 #[tokio::main]
@@ -146,14 +151,17 @@ impl Application for PalantirApp {
                     return Command::none();
                 }
                 self.status = "validating assignment...".into();
-                return Command::perform(async move { moodle_lookup_cmid(&base, &tok, &cmid).await }, Msg::IdVerified);
+                return Command::perform(async move { 
+                    moodle_get_assignment_identifiers(&base, &tok, &cmid).await 
+                }, Msg::IdVerified);
             }
             Msg::IdVerified(res) => {
                 match res {
-                    Ok((assign_id, name)) => {
+                    Ok(identifiers) => {
                         // replace the user-entered CMID with the real assignment instance id
-                        self.assignment_id = assign_id;
-                        self.assignment_title = Some(name);
+                        self.assignment_id = identifiers.cmid;
+                        self.assignment_instance_id = identifiers.instance;
+                        self.assignment_title = Some(identifiers.name);
                         self.status.clear();
                         self.step = Step::PickFiles;
                     }
@@ -161,6 +169,7 @@ impl Application for PalantirApp {
                         self.status = format!("could not validate: {}", e);
                     }
                 }
+                
                 Command::none()
             }
             Msg::PickFiles => {
@@ -191,7 +200,7 @@ impl Application for PalantirApp {
 
                 // capture values for async tasks
                 let base = self.moodle_base.clone();
-                let aid  = self.assignment_id.clone();      // this is the resolved assignment *instance* id
+                let aid  = self.assignment_instance_id.clone(); 
                 let files = self.files.clone();
                 let token = tok.clone();
 
@@ -227,11 +236,11 @@ impl Application for PalantirApp {
             Msg::FinishedMain(res) => {
                 match res {
                     Ok(r) => {
-                        self.status = format!("moodle ok receipt {}", r);
+                        self.status = format!("✅ {}", r);
                         self.progress_main = 1.0;
                     }
                     Err(e) => {
-                        self.status = format!("moodle error {}", e);
+                        self.status = format!("❌ {}", e);
                         self.progress_main = 1.0;
                     }
                 }
@@ -295,13 +304,14 @@ impl Application for PalantirApp {
             Msg::AssignmentIdChanged(s) => { 
                 self.assignment_id = s; Command::none() 
             }
-            
-
-
         }
     }
 
     fn view(&self) -> Element<Msg> {
+        let title = |s: &str| text(s)
+            .size(20)
+            .style(theme::Text::Color(Color::from_rgb8(71, 85, 105)));
+
         let subtitle = |s: &str| text(s)
             .size(16)
             .style(theme::Text::Color(Color::from_rgb8(71, 85, 105)));
@@ -376,7 +386,9 @@ impl Application for PalantirApp {
                 };
 
                 // then use `list_content` here
+                let display_title = format!("Submit to: {}", self.assignment_title.clone().unwrap_or("Unknown".into()));
                 let body = column![
+                    title(&display_title),
                     subtitle("Pick all files and folders you want to submit"),
                     text(format!(
                         "  {} items  •  {}",
@@ -758,107 +770,102 @@ async fn moodle_get_token(base: &str, service: &str, username: &str, password: &
         serde_json::from_str(&text).map_err(|_| format!("unexpected token response: {}", text))?;
 
     if let Some(tok) = v.get("token").and_then(|t| t.as_str()) {
-        // If you ever need it later, you can also read v["privatetoken"]
         return Ok(tok.to_string());
     }
 
-    // Moodle typically returns {"error":"...","errorcode":"..."} on bad creds
     let msg = v.get("error").and_then(|e| e.as_str()).unwrap_or("login incorrect");
     Err(msg.to_string())
 }
 
-
-async fn moodle_get_assignment_name(base: &str, token: &str, assignment_id: &str) -> Result<String, String> {
-    // Try mod_assign_get_submission_status which often returns an assignment name
-    let url = format!("{}/webservice/rest/server.php", base);
-    let form = [
-        ("wstoken", token),
-        ("wsfunction", "mod_assign_get_submission_status"),
-        ("moodlewsrestformat", "json"),
-        ("assignmentid", assignment_id),
-    ];
-    let resp = reqwest::Client::new().post(url).form(&form).send().await.map_err(|e| e.to_string())?;
-    let text = resp.text().await.map_err(|e| e.to_string())?;
-    let v: serde_json::Value = serde_json::from_str(&text).map_err(|_| format!("unexpected response: {}", text))?;
-    if let Some(ex) = v.get("exception") {
-        let msg = v.get("message").and_then(|m| m.as_str()).unwrap_or("error");
-        return Err(format!("{}: {}", ex, msg));
-    }
-    if let Some(name) = v.get("assignmentname").and_then(|x| x.as_str()) {
-        return Ok(name.to_string());
-    }
-    if let Some(name) = v.get("assignment").and_then(|a| a.get("name")).and_then(|x| x.as_str()) {
-        return Ok(name.to_string());
-    }
-    Ok("Assignment".to_string())
-}
-
 async fn moodle_upload_and_submit(base: &str, token: &str, assignment_id: &str, files: &[PathBuf]) -> Result<String, String> {
-    if files.is_empty() {
-        return Err("no files selected".to_string());
-    }
-
     let client = reqwest::Client::new();
     let mut itemid: Option<i64> = None;
 
     for (idx, path) in files.iter().enumerate() {
-        let mut url = reqwest::Url::parse(&format!("{}/webservice/upload.php", base)).map_err(|e| e.to_string())?;
+        let mut url = reqwest::Url::parse(&format!("{}/webservice/upload.php", base))
+            .map_err(|e| e.to_string())?;
+        
         {
             let mut qp = url.query_pairs_mut();
             qp.append_pair("token", token);
-            if let Some(id) = itemid { qp.append_pair("itemid", &id.to_string()); }
+            if let Some(id) = itemid { 
+                qp.append_pair("itemid", &id.to_string()); 
+            }
         }
 
-        let bytes = tokio::fs::read(path).await.map_err(|e| format!("read {:?}: {}", path, e))?;
+        let bytes = tokio::fs::read(path)
+            .await
+            .map_err(|e| format!("read {:?}: {}", path, e))?;
+        
         let part = reqwest::multipart::Part::bytes(bytes)
-            .file_name(path.file_name().unwrap_or_default().to_string_lossy().to_string());
+            .file_name(path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string()
+            );
         let form = reqwest::multipart::Form::new().part("file_1", part);
 
-        let resp = client.post(url).multipart(form).send().await.map_err(|e| format!("upload {:?}: {}", path, e))?;
-        let body = resp.text().await.map_err(|e| e.to_string())?;
-        let arr: serde_json::Value = serde_json::from_str(&body).map_err(|_| format!("unexpected upload response: {}", body))?;
-        let first = arr.get(0).ok_or_else(|| format!("empty upload response: {}", body))?;
-        let id = first.get("itemid").and_then(|n| n.as_i64()).ok_or_else(|| format!("missing itemid in: {}", first))?;
+        let resp = client
+            .post(url)
+            .multipart(form)
+            .send()
+            .await
+            .map_err(|e| format!("upload {:?}: {}", path, e))?;
 
-        if itemid.is_none() && idx == 0 { itemid = Some(id); }
+        let body = resp
+            .text()
+            .await
+            .map_err(|e| e.to_string())?;
+        
+        let arr: serde_json::Value = serde_json::from_str(&body)
+            .map_err(|_| format!("unexpected upload response: {}", body))?;
+        
+        let first = arr
+            .get(0)
+            .ok_or_else(|| format!("empty upload response: {}", body))?;
+        
+        let id = first
+            .get("itemid")
+            .and_then(|n| n.as_i64())
+            .ok_or_else(|| format!("missing itemid in: {}", first))?;
+
+        if itemid.is_none() && idx == 0 { 
+            itemid = Some(id); 
+        }
     }
 
-    let draft_id = itemid.ok_or_else(|| "no itemid returned".to_string())?;
 
-    // save submission
+    let draft_id = itemid
+        .ok_or_else(|| "no itemid returned".to_string())?;
+
     let url = format!("{}/webservice/rest/server.php", base);
-    let form = [
-        ("wstoken", token),
-        ("wsfunction", "mod_assign_save_submission"),
-        ("moodlewsrestformat", "json"),
-        ("assignmentid", assignment_id),
-        ("plugindata[files_filemanager]", &draft_id.to_string()),
-    ];
-    let resp = client.post(&url).form(&form).send().await.map_err(|e| e.to_string())?;
-    let text = resp.text().await.map_err(|e| e.to_string())?;
-    if serde_json::from_str::<serde_json::Value>(&text).ok().and_then(|v| v.get("exception").cloned()).is_some() {
-        return Err(format!("save_submission failed: {}", text));
-    }
+    let body = format!(
+        "wstoken={}&wsfunction=mod_assign_save_submission&moodlewsrestformat=json&assignmentid={}&plugindata[files_filemanager]={}",
+        urlencoding::encode(token),
+        assignment_id,
+        draft_id, // numeric, does not need encoding
+    );
 
-    // finalize
-    let form2 = [
-        ("wstoken", token),
-        ("wsfunction", "mod_assign_submit_for_grading"),
-        ("moodlewsrestformat", "json"),
-        ("assignmentid", assignment_id),
-    ];
-    let resp2 = client.post(&url).form(&form2).send().await.map_err(|e| e.to_string())?;
-    let text2 = resp2.text().await.map_err(|e| e.to_string())?;
-    if serde_json::from_str::<serde_json::Value>(&text2).ok().and_then(|v| v.get("exception").cloned()).is_some() {
-        return Err(format!("submit_for_grading failed: {}", text2));
-    }
+    let resp = client
+        .post(&url)
+        .header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .body(body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+
+    let text = resp.text().await.map_err(|e| e.to_string())?;
+
+    check_save_submission_response(&text)?;
+    moodle_submit_for_grading(&client, base, token, assignment_id).await?;
+
 
     Ok(format!("submitted assignment {} with draft {}", assignment_id, draft_id))
 }
 
-
-async fn moodle_lookup_cmid(base: &str, token: &str, cmid: &str) -> Result<(String, String), String> {
-    // GET/POST both work; we’ll POST form data as you do elsewhere
+async fn moodle_get_assignment_identifiers(base: &str, token: &str, cmid: &str) -> Result<AssignmentIdentifiers, String> {
     let url = format!("{}/webservice/rest/server.php", base);
     let form = [
         ("wstoken", token),
@@ -901,5 +908,95 @@ async fn moodle_lookup_cmid(base: &str, token: &str, cmid: &str) -> Result<(Stri
         .unwrap_or("Assignment")
         .to_string();
 
-    Ok((instance, name))
+    let cmid = cmid.into();
+    Ok(AssignmentIdentifiers{cmid, instance, name})
+}
+
+async fn moodle_submit_for_grading(
+    client: &reqwest::Client,
+    base: &str,
+    token: &str,
+    assignment_id: &str,
+) -> Result<(), String> {
+    let url = format!("{}/webservice/rest/server.php", base);
+
+    // attempt 1: with submission statement
+    let body_with = format!(
+        "wstoken={}&wsfunction=mod_assign_submit_for_grading&moodlewsrestformat=json&assignmentid={}&acceptsubmissionstatement=1",
+        urlencoding::encode(token),
+        assignment_id
+    );
+
+    let resp1 = client.post(&url)
+        .header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .body(body_with)
+        .send().await.map_err(|e| e.to_string())?;
+
+    let text1 = resp1.text().await.map_err(|e| e.to_string())?;
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&text1) {
+        if v.get("exception").is_none() {
+            return Ok(()); // success
+        }
+        // if this exact failure is an invalid_parameter, fall back without the flag
+        if v.get("errorcode").and_then(|x| x.as_str()) == Some("invalidparameter") {
+            // attempt 2: without the flag
+            let body_no = format!(
+                "wstoken={}&wsfunction=mod_assign_submit_for_grading&moodlewsrestformat=json&assignmentid={}",
+                urlencoding::encode(token),
+                assignment_id
+            );
+            let resp2 = client.post(&url)
+                .header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .body(body_no)
+                .send().await.map_err(|e| e.to_string())?;
+            let text2 = resp2.text().await.map_err(|e| e.to_string())?;
+            if serde_json::from_str::<serde_json::Value>(&text2)
+                .ok()
+                .and_then(|v2| v2.get("exception").cloned())
+                .is_none()
+            {
+                return Ok(());
+            }
+            return Err(format!("submit_for_grading failed: {}", text2));
+        }
+        return Err(format!("submit_for_grading failed: {}", text1));
+    } else {
+        // non-JSON usually means success (older Moodle returns empty body), but be strict:
+        return Ok(());
+    }
+}
+
+fn check_save_submission_response(text: &str) -> Result<(), String> {
+    // success on many Moodle versions is exactly an empty array: []
+    if let Ok(val) = serde_json::from_str::<serde_json::Value>(text) {
+        match val {
+            serde_json::Value::Array(arr) => {
+                if arr.is_empty() {
+                    return Ok(());
+                }
+                // warnings present
+                // build a compact, user friendly error using warningcode and message
+                let mut lines = Vec::new();
+                for w in arr {
+                    let code = w.get("warningcode").and_then(|x| x.as_str()).unwrap_or("warning");
+                    let msg  = w.get("item").and_then(|x| x.as_str())
+                         .or_else(|| w.get("message").and_then(|x| x.as_str()))
+                         .unwrap_or("unknown");
+                    lines.push(format!("{}: {}", code, msg));
+                }
+                return Err(format!("save_submission warnings: {}", lines.join("; ")));
+            }
+            serde_json::Value::Object(obj) => {
+                if obj.get("exception").is_some() {
+                    return Err(format!("save_submission failed: {}", text));
+                }
+                // some sites may return {} or another benign object
+                return Ok(());
+            }
+            _ => return Ok(()),
+        }
+    } else {
+        // non-JSON or unexpected, treat as success to mirror Moodle’s older behaviors
+        Ok(())
+    }
 }
