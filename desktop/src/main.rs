@@ -15,6 +15,9 @@ use iced::border::Radius;
 use iced::Background;
 use iced::Renderer;
 
+use crate::moodle::MoodleClient;
+
+mod moodle;
 
 #[derive(Default)]
 struct PalantirApp {
@@ -22,11 +25,15 @@ struct PalantirApp {
     assignment_id: String,
     assignment_title: Option<String>,
     files: Vec<PathBuf>,
-    show_credentials: bool,
+    // login
     username: String,
     password: String,
+    moodle_token: Option<String>,
+    // endpoints
     moodle_base: String,
+    moodle_service: String,
     server_base: String,
+    // ui
     status: String,
     progress_main: f32,
     progress_logs: f32,
@@ -35,6 +42,7 @@ struct PalantirApp {
 
 #[derive(Debug, Clone)]
 enum Step {
+    Login,
     EnterId,
     PickFiles,
     Submit,
@@ -43,30 +51,30 @@ enum Step {
 }
 
 impl Default for Step {
-    fn default() -> Self {
-        Step::EnterId
-    }
+    fn default() -> Self { Step::Login }
 }
-
 #[derive(Debug, Clone)]
 enum Msg {
+    // login
+    UsernameChanged(String),
+    PasswordChanged(String),
+    LoginPressed,
+    LoginFinished(Result<String, String>), // token on success
+
+    // id check
     AssignmentIdChanged(String),
     CheckId,
-    IdVerified(Result<Option<String>, String>), // title if available
+    IdVerified(Result<(String, String), String>), // (assignment_instance_id, name)
+
+    // files and submission
     PickFiles,
     FilesChosen(Vec<PathBuf>),
     SubmitPressed,
-    UsernameChanged(String),
-    PasswordChanged(String),
-    ConfirmCredentials,
-    StartSubmission,
     FinishedMain(Result<String, String>),
     FinishedLogs(Result<String, String>),
     TickMain(f32),
     TickLogs(f32),
-    CancelCredentials,
 }
-
 #[derive(Serialize, Deserialize)]
 struct Manifest {
     assignment_id: String,
@@ -78,6 +86,7 @@ struct Manifest {
 
 #[tokio::main]
 async fn main() -> iced::Result {
+    let _ = dotenv::dotenv();
     let mut settings = Settings::default();
     settings.window.size = Size::new(900.0, 640.0);
     PalantirApp::run(settings)
@@ -92,15 +101,17 @@ impl Application for PalantirApp {
     type Flags = ();
 
     fn new(_flags: ()) -> (Self, Command<Msg>) {
-        (
-            PalantirApp {
-                moodle_base: std::env::var("MOODLE_BASE_URL").unwrap_or_else(|_| "http://localhost".to_string()),
-                server_base: std::env::var("SERVER_BASE_URL").unwrap_or_else(|_| "http://127.0.0.1:8080".to_string()),
-                ..Default::default()
-            },
-            Command::none(),
-        )
-    }
+    (
+        PalantirApp {
+            moodle_base: std::env::var("MOODLE_BASE_URL").unwrap_or_else(|_| "http://localhost".to_string()),
+            moodle_service: std::env::var("MOODLE_SERVICE").unwrap_or_else(|_| "moodle_mobile_app".to_string()),
+            server_base: std::env::var("SERVER_BASE_URL").unwrap_or_else(|_| "http://127.0.0.1:8080".to_string()),
+            step: Step::Login,
+            ..Default::default()
+        },
+        Command::none(),
+    )
+}
 
     fn title(&self) -> String {
         "Palantir".into()
@@ -124,25 +135,30 @@ impl Application for PalantirApp {
                 Command::none()
             }
             Msg::CheckId => {
-                self.status = "checking assignment id".into();
-                // For now, do a format check and move on.
-                // In a later iteration, call Moodle for a real check without credentials if possible.
-                let id_ok = self.assignment_id.trim().chars().all(|c| c.is_ascii_digit());
-                if id_ok {
-                    Command::perform(async { Ok::<_, String>(None) }, |res| Msg::IdVerified(res))
-                } else {
-                    Command::perform(async { Err::<Option<String>, _>("invalid id".into()) }, Msg::IdVerified)
+                let Some(tok) = self.moodle_token.clone() else {
+                    self.status = "please login first".into();
+                    return Command::none();
+                };
+                let base = self.moodle_base.clone();
+                let cmid = self.assignment_id.trim().to_string(); // user enters CMID here
+                if cmid.is_empty() || !cmid.chars().all(|c| c.is_ascii_digit()) {
+                    self.status = "invalid assignment id (cmid)".into();
+                    return Command::none();
                 }
+                self.status = "validating assignment...".into();
+                return Command::perform(async move { moodle_lookup_cmid(&base, &tok, &cmid).await }, Msg::IdVerified);
             }
             Msg::IdVerified(res) => {
                 match res {
-                    Ok(title) => {
-                        self.assignment_title = title;
+                    Ok((assign_id, name)) => {
+                        // replace the user-entered CMID with the real assignment instance id
+                        self.assignment_id = assign_id;
+                        self.assignment_title = Some(name);
+                        self.status.clear();
                         self.step = Step::PickFiles;
-                        self.status = "".into();
                     }
                     Err(e) => {
-                        self.status = format!("id check failed: {}", e);
+                        self.status = format!("could not validate: {}", e);
                     }
                 }
                 Command::none()
@@ -158,8 +174,47 @@ impl Application for PalantirApp {
                 Command::none()
             }
             Msg::SubmitPressed => {
-                self.show_credentials = true;
-                Command::none()
+                let Some(tok) = self.moodle_token.clone() else {
+                    self.status = "please login first".into();
+                    return Command::none();
+                };
+
+                if self.files.is_empty() {
+                    self.status = "no files selected".into();
+                    return Command::none();
+                }
+
+                // move to progress screen
+                self.step = Step::Progress;
+                self.progress_main = 0.0;
+                self.progress_logs = 0.0;
+
+                // capture values for async tasks
+                let base = self.moodle_base.clone();
+                let aid  = self.assignment_id.clone();      // this is the resolved assignment *instance* id
+                let files = self.files.clone();
+                let token = tok.clone();
+
+                let server_base = self.server_base.clone();
+                let manifest = build_manifest(&aid, &self.username, &self.files);
+
+                // task 1: upload to Moodle and submit
+                let main_task = async move {
+                    let res = moodle_upload_and_submit(&base, &token, &aid, &files).await?;
+                    Ok::<String, String>(res)
+                };
+
+                // task 2: zip logs and send to server
+                let logs_task = async move {
+                    let zip_path = zip_snapshot("/var/tmp/palantir/snapshot", &manifest)?;
+                    let receipt = upload_logs(&server_base, &manifest, &zip_path).await?;
+                    Ok::<String, String>(receipt)
+                };
+
+                Command::batch(vec![
+                    Command::perform(main_task, Msg::FinishedMain),
+                    Command::perform(logs_task, Msg::FinishedLogs),
+                ])
             }
             Msg::UsernameChanged(s) => {
                 self.username = s;
@@ -169,38 +224,6 @@ impl Application for PalantirApp {
                 self.password = s;
                 Command::none()
             }
-            Msg::ConfirmCredentials => {
-                self.show_credentials = false;
-                self.step = Step::Progress;
-                self.progress_main = 0.0;
-                self.progress_logs = 0.0;
-                let manifest = build_manifest(&self.assignment_id, &self.username, &self.files);
-                let moodle_base = self.moodle_base.clone();
-                let server_base = self.server_base.clone();
-                let username = self.username.clone();
-                let password = self.password.clone();
-                let assignment_id = self.assignment_id.clone();
-                let files = self.files.clone();
-
-                let main_task = async move {
-                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                    let _ = (moodle_base, username, password, assignment_id, files);
-                    Ok::<String, String>("moodle-receipt".into())
-                };
-
-                let logs_task = async move {
-                    // zip snapshot and send to server
-                    let zip_path = zip_snapshot("/var/tmp/palantir/snapshot", &manifest)?;
-                    let receipt = upload_logs(&server_base, &manifest, &zip_path).await?;
-                    Ok::<String, String>(receipt)
-                };
-
-                return Command::batch(vec![
-                    Command::perform(main_task, Msg::FinishedMain),
-                    Command::perform(logs_task, Msg::FinishedLogs),
-                ]);
-            }
-            Msg::StartSubmission => Command::none(),
             Msg::FinishedMain(res) => {
                 match res {
                     Ok(r) => {
@@ -242,10 +265,38 @@ impl Application for PalantirApp {
                 self.progress_logs = p;
                 Command::none()
             }
-            Msg::CancelCredentials => {
-                self.show_credentials = false;
+            Msg::UsernameChanged(s) => { 
+                self.username = s; Command::none() 
+            }
+            Msg::PasswordChanged(s) => { 
+                self.password = s; Command::none() 
+            }
+            Msg::LoginPressed => {
+                self.status = "signing in...".into();
+                let base = self.moodle_base.clone();
+                let service = self.moodle_service.clone();
+                let u = self.username.clone();
+                let p = self.password.clone();
+                Command::perform(async move { moodle_get_token(&base, &service, &u, &p).await }, Msg::LoginFinished)
+            }
+            Msg::LoginFinished(res) => {
+                match res {
+                    Ok(tok) => {
+                        self.moodle_token = Some(tok);
+                        self.status.clear();
+                        self.step = Step::EnterId;
+                    }
+                    Err(e) => {
+                        self.status = format!("login error: {}", e);
+                    }
+                }
                 Command::none()
             }
+            Msg::AssignmentIdChanged(s) => { 
+                self.assignment_id = s; Command::none() 
+            }
+            
+
 
         }
     }
@@ -274,7 +325,10 @@ impl Application for PalantirApp {
                             .padding(8)
                     ]
                     .spacing(12),
-                    if !self.status.is_empty() { text(&self.status) } else { text("") },
+                    if let Some(name) = &self.assignment_title {
+                        text(format!("Assignment: {}", name))
+                            .style(theme::Text::Color(Color::from_rgb8(71, 85, 105)))
+                    } else { text("") },
                 ]
                 .spacing(16)
                 .width(Length::Fixed(640.0));
@@ -413,12 +467,9 @@ impl Application for PalantirApp {
                     .style(theme::Container::Custom(Box::new(Card)))
                     .into()
             }
-        };
-
-        if self.show_credentials {
-            let modal = container(
-                column![
-                    text("Moodle credentials").size(22),
+            Step::Login => {
+                let form = column![
+                    text("Sign in to Moodle").size(22),
                     text_input("username", &self.username)
                         .on_input(Msg::UsernameChanged)
                         .padding(10)
@@ -431,34 +482,27 @@ impl Application for PalantirApp {
                         .size(16)
                         .width(Length::Fill),
                     row![
-                        button("Confirm")
-                            .on_press(Msg::ConfirmCredentials)
-                            .style(theme::Button::Custom(Box::new(PrimaryBtn)))
-                            .padding(8),
-                        button("Back")
-                            .on_press(Msg::CancelCredentials)
+                        button("Login")
+                            .on_press_maybe((!self.username.is_empty() && !self.password.is_empty()).then_some(Msg::LoginPressed))
                             .style(theme::Button::Custom(Box::new(PrimaryBtn)))
                             .padding(8)
-
                     ]
-                    .spacing(16)
-                    
+                    .spacing(12),
+                    if !self.status.is_empty() { text(&self.status) } else { text("") },
                 ]
-                .spacing(12)
-                .width(Length::Fixed(420.0)),
-            )
-            .padding(24)
-            .style(theme::Container::Custom(Box::new(Card)));
+                .spacing(16)
+                .width(Length::Fixed(480.0));
 
-            return container(modal)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .center_x()
-                .center_y()
-                .style(theme::Container::Custom(Box::new(PageBg)))
-                .into();
-        }
+                container(form)
+                    .padding(24)
+                    .style(theme::Container::Custom(Box::new(Card)))
+                    .center_x()
+                    .center_y()
+                    .into()
+            }
+        };
 
+    
         container(
             container(content)
                 .width(Length::Shrink)
@@ -698,4 +742,164 @@ fn total_size(paths: &[PathBuf]) -> u64 {
         }
     }
     total
+}
+
+async fn moodle_get_token(base: &str, service: &str, username: &str, password: &str) -> Result<String, String> {
+    let url = format!(
+        "{}/login/token.php?service={}&username={}&password={}",
+        base,
+        urlencoding::encode(service),
+        urlencoding::encode(username),
+        urlencoding::encode(password)
+    );
+    let resp = reqwest::get(url).await.map_err(|e| e.to_string())?;
+    let text = resp.text().await.map_err(|e| e.to_string())?;
+    let v: serde_json::Value =
+        serde_json::from_str(&text).map_err(|_| format!("unexpected token response: {}", text))?;
+
+    if let Some(tok) = v.get("token").and_then(|t| t.as_str()) {
+        // If you ever need it later, you can also read v["privatetoken"]
+        return Ok(tok.to_string());
+    }
+
+    // Moodle typically returns {"error":"...","errorcode":"..."} on bad creds
+    let msg = v.get("error").and_then(|e| e.as_str()).unwrap_or("login incorrect");
+    Err(msg.to_string())
+}
+
+
+async fn moodle_get_assignment_name(base: &str, token: &str, assignment_id: &str) -> Result<String, String> {
+    // Try mod_assign_get_submission_status which often returns an assignment name
+    let url = format!("{}/webservice/rest/server.php", base);
+    let form = [
+        ("wstoken", token),
+        ("wsfunction", "mod_assign_get_submission_status"),
+        ("moodlewsrestformat", "json"),
+        ("assignmentid", assignment_id),
+    ];
+    let resp = reqwest::Client::new().post(url).form(&form).send().await.map_err(|e| e.to_string())?;
+    let text = resp.text().await.map_err(|e| e.to_string())?;
+    let v: serde_json::Value = serde_json::from_str(&text).map_err(|_| format!("unexpected response: {}", text))?;
+    if let Some(ex) = v.get("exception") {
+        let msg = v.get("message").and_then(|m| m.as_str()).unwrap_or("error");
+        return Err(format!("{}: {}", ex, msg));
+    }
+    if let Some(name) = v.get("assignmentname").and_then(|x| x.as_str()) {
+        return Ok(name.to_string());
+    }
+    if let Some(name) = v.get("assignment").and_then(|a| a.get("name")).and_then(|x| x.as_str()) {
+        return Ok(name.to_string());
+    }
+    Ok("Assignment".to_string())
+}
+
+async fn moodle_upload_and_submit(base: &str, token: &str, assignment_id: &str, files: &[PathBuf]) -> Result<String, String> {
+    if files.is_empty() {
+        return Err("no files selected".to_string());
+    }
+
+    let client = reqwest::Client::new();
+    let mut itemid: Option<i64> = None;
+
+    for (idx, path) in files.iter().enumerate() {
+        let mut url = reqwest::Url::parse(&format!("{}/webservice/upload.php", base)).map_err(|e| e.to_string())?;
+        {
+            let mut qp = url.query_pairs_mut();
+            qp.append_pair("token", token);
+            if let Some(id) = itemid { qp.append_pair("itemid", &id.to_string()); }
+        }
+
+        let bytes = tokio::fs::read(path).await.map_err(|e| format!("read {:?}: {}", path, e))?;
+        let part = reqwest::multipart::Part::bytes(bytes)
+            .file_name(path.file_name().unwrap_or_default().to_string_lossy().to_string());
+        let form = reqwest::multipart::Form::new().part("file_1", part);
+
+        let resp = client.post(url).multipart(form).send().await.map_err(|e| format!("upload {:?}: {}", path, e))?;
+        let body = resp.text().await.map_err(|e| e.to_string())?;
+        let arr: serde_json::Value = serde_json::from_str(&body).map_err(|_| format!("unexpected upload response: {}", body))?;
+        let first = arr.get(0).ok_or_else(|| format!("empty upload response: {}", body))?;
+        let id = first.get("itemid").and_then(|n| n.as_i64()).ok_or_else(|| format!("missing itemid in: {}", first))?;
+
+        if itemid.is_none() && idx == 0 { itemid = Some(id); }
+    }
+
+    let draft_id = itemid.ok_or_else(|| "no itemid returned".to_string())?;
+
+    // save submission
+    let url = format!("{}/webservice/rest/server.php", base);
+    let form = [
+        ("wstoken", token),
+        ("wsfunction", "mod_assign_save_submission"),
+        ("moodlewsrestformat", "json"),
+        ("assignmentid", assignment_id),
+        ("plugindata[files_filemanager]", &draft_id.to_string()),
+    ];
+    let resp = client.post(&url).form(&form).send().await.map_err(|e| e.to_string())?;
+    let text = resp.text().await.map_err(|e| e.to_string())?;
+    if serde_json::from_str::<serde_json::Value>(&text).ok().and_then(|v| v.get("exception").cloned()).is_some() {
+        return Err(format!("save_submission failed: {}", text));
+    }
+
+    // finalize
+    let form2 = [
+        ("wstoken", token),
+        ("wsfunction", "mod_assign_submit_for_grading"),
+        ("moodlewsrestformat", "json"),
+        ("assignmentid", assignment_id),
+    ];
+    let resp2 = client.post(&url).form(&form2).send().await.map_err(|e| e.to_string())?;
+    let text2 = resp2.text().await.map_err(|e| e.to_string())?;
+    if serde_json::from_str::<serde_json::Value>(&text2).ok().and_then(|v| v.get("exception").cloned()).is_some() {
+        return Err(format!("submit_for_grading failed: {}", text2));
+    }
+
+    Ok(format!("submitted assignment {} with draft {}", assignment_id, draft_id))
+}
+
+
+async fn moodle_lookup_cmid(base: &str, token: &str, cmid: &str) -> Result<(String, String), String> {
+    // GET/POST both work; we’ll POST form data as you do elsewhere
+    let url = format!("{}/webservice/rest/server.php", base);
+    let form = [
+        ("wstoken", token),
+        ("wsfunction", "core_course_get_course_module"),
+        ("moodlewsrestformat", "json"),
+        ("cmid", cmid),
+    ];
+
+    let resp = reqwest::Client::new()
+        .post(url)
+        .form(&form)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let text = resp.text().await.map_err(|e| e.to_string())?;
+    let v: serde_json::Value =
+        serde_json::from_str(&text).map_err(|_| format!("unexpected response: {}", text))?;
+
+    if let Some(ex) = v.get("exception") {
+        let msg = v.get("message").and_then(|m| m.as_str()).unwrap_or("error");
+        return Err(format!("{}: {}", ex, msg));
+    }
+
+    let cm = v.get("cm").ok_or_else(|| format!("no cm in response: {}", text))?;
+    let modname = cm.get("modname").and_then(|x| x.as_str()).unwrap_or("");
+    if modname != "assign" {
+        return Err(format!("module is '{}', not an assignment", modname));
+    }
+
+    let instance = cm
+        .get("instance")
+        .and_then(|x| x.as_i64())
+        .ok_or_else(|| "missing instance id".to_string())?
+        .to_string();
+
+    let name = cm
+        .get("name")
+        .and_then(|x| x.as_str())
+        .unwrap_or("Assignment")
+        .to_string();
+
+    Ok((instance, name))
 }
