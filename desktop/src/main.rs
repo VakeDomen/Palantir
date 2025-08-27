@@ -214,12 +214,13 @@ impl Application for PalantirApp {
 
                 // capture values for async tasks
                 let base = self.moodle_base.clone();
+                let sid  = self.assignment_id.clone(); 
                 let aid  = self.assignment_instance_id.clone(); 
                 let files = self.files.clone();
                 let token = tok.clone();
 
                 let server_base = self.server_base.clone();
-                let manifest = build_manifest(&aid, &self.username, &self.files);
+                let manifest = build_manifest(&sid, &self.username, &self.files);
 
                 // task 1: upload to Moodle and submit
                 let main_task = async move {
