@@ -1,8 +1,11 @@
-use iced::widget::{button, column, container, row, scrollable, text, text_input, ProgressBar};
-use iced::{Application, Color, Command, Element, Length, Settings, Size, Theme};
+use iced::keyboard::key;
+use iced::widget::text_input::Id;
+use iced::widget::{self, button, column, container, row, scrollable, text, text_input, ProgressBar};
+use iced::{keyboard, Application, Color, Command, Element, Length, Settings, Size, Subscription, Theme};
 use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use zip::ZipWriter;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -13,6 +16,7 @@ use iced::theme;
 use iced::Border;
 use iced::border::Radius;
 use iced::Background;
+use iced::event::{self, Event};
 
 
 
@@ -38,7 +42,7 @@ struct PalantirApp {
     receipt: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum Step {
     Login,
     EnterId,
@@ -72,7 +76,12 @@ enum Msg {
     FinishedLogs(Result<String, String>),
     TickMain(f32),
     TickLogs(f32),
+
+    // tabs
+    Event(Event),
 }
+
+
 #[derive(Serialize, Deserialize)]
 struct Manifest {
     assignment_id: String,
@@ -122,6 +131,7 @@ impl Application for PalantirApp {
         "Palantir".into()
     }
 
+
     fn theme(&self) -> Theme {
         let palette = iced::theme::Palette {
             background: Color::from_rgb8(248, 250, 252),
@@ -131,6 +141,10 @@ impl Application for PalantirApp {
             danger:     Color::from_rgb8(239, 68, 68),
         };
         Theme::custom("Palantir".to_string(), palette)
+    }
+
+    fn subscription(&self) -> Subscription<Msg> {
+        event::listen().map(Msg::Event)
     }
 
     fn update(&mut self, message: Msg) -> Command<Msg> {
@@ -215,7 +229,7 @@ impl Application for PalantirApp {
 
                 // task 2: zip logs and send to server
                 let logs_task = async move {
-                    let zip_path = zip_snapshot("/var/tmp/palantir/snapshot", &manifest)?;
+                    let zip_path = zip_snapshot("/var/tmp/", &manifest)?;
                     let receipt = upload_logs(&server_base, &manifest, &zip_path).await?;
                     Ok::<String, String>(receipt)
                 };
@@ -297,6 +311,7 @@ impl Application for PalantirApp {
                     }
                     Err(e) => {
                         self.status = format!("login error: {}", e);
+                        self.step = Step::Login;
                     }
                 }
                 Command::none()
@@ -304,6 +319,38 @@ impl Application for PalantirApp {
             Msg::AssignmentIdChanged(s) => { 
                 self.assignment_id = s; Command::none() 
             }
+
+            Msg::Event(event) => match event {
+                Event::Keyboard(keyboard::Event::KeyPressed {
+                    key: keyboard::Key::Named(key::Named::Tab),
+                    modifiers,
+                    ..
+                }) => {
+                    if modifiers.shift() {
+                        widget::focus_previous()
+                    } else {
+                        widget::focus_next()
+                    }
+                }
+                Event::Keyboard(keyboard::Event::KeyPressed {
+                    key: keyboard::Key::Named(key::Named::Enter),
+                    ..
+                }) => {
+                    if self.step == Step::Login {
+                        self.status = "signing in...".into();
+                        let base = self.moodle_base.clone();
+                        let service = self.moodle_service.clone();
+                        let u = self.username.clone();
+                        let p = self.password.clone();
+                        return Command::perform(async move { moodle_get_token(&base, &service, &u, &p).await }, Msg::LoginFinished);
+                    };
+
+
+
+                    Command::none()
+                }
+                _ => Command::none(),
+            },
         }
     }
 
@@ -484,11 +531,13 @@ impl Application for PalantirApp {
                     text("Sign in to Moodle").size(22),
                     text_input("username", &self.username)
                         .on_input(Msg::UsernameChanged)
+                        .id(Id::unique())
                         .padding(10)
                         .size(16)
                         .width(Length::Fill),
                     text_input("password", &self.password)
                         .on_input(Msg::PasswordChanged)
+                        .id(Id::unique())
                         .secure(true)
                         .padding(10)
                         .size(16)
@@ -577,41 +626,54 @@ fn hash_file(path: &Path) -> String {
 fn zip_snapshot(snapshot_dir: &str, manifest: &Manifest) -> Result<PathBuf, String> {
     let out_name = format!(
         "palantir-snapshot-{}-{}.zip",
-        manifest.assignment_id,
+        manifest.assignment_id, 
         manifest.username
     );
     let out_path = std::env::temp_dir().join(out_name);
-    let file = File::create(&out_path).map_err(|e| e.to_string())?;
-    let mut zip = zip::ZipWriter::new(file);
 
+    let file = File::create(&out_path)
+        .map_err(|e| format!("create zip {}: {}", out_path.display(), e))?;
+    
+    let mut zip = ZipWriter::new(file);
     let opts = FileOptions::default();
 
-    // add manifest json
-    let manifest_json = serde_json::to_vec_pretty(manifest).map_err(|e| e.to_string())?;
-    zip.start_file("manifest.json", opts).map_err(|e| e.to_string())?;
-    zip.write_all(&manifest_json).map_err(|e| e.to_string())?;
+    // manifest.json
+    let manifest_json = serde_json::to_vec_pretty(manifest)
+        .map_err(|e| format!("serialize manifest: {}", e))?;
+    
+    zip.start_file("manifest.json", opts)
+        .map_err(|e| format!("start manifest.json: {}", e))?;
+    
+    zip.write_all(&manifest_json)
+        .map_err(|e| format!("write manifest.json: {}", e))?;
 
-    // add snapshot directory if present
-    let path = Path::new(snapshot_dir);
-    if path.exists() {
-        for entry in WalkDir::new(path) {
-            let entry = entry.map_err(|e| e.to_string())?;
-            let p = entry.path();
-            if p.is_file() {
-                let rel = p.strip_prefix(path).unwrap();
-                let rel_str = rel.to_string_lossy();
-                zip.start_file(format!("snapshot/{}", rel_str), opts).map_err(|e| e.to_string())?;
-                let mut f = File::open(p).map_err(|e| e.to_string())?;
-                let mut buf = Vec::new();
-                f.read_to_end(&mut buf).map_err(|e| e.to_string())?;
-                zip.write_all(&buf).map_err(|e| e.to_string())?;
-            }
-        }
+    // add /var/tmp/palantir.log exactly
+    let log_path = Path::new(snapshot_dir).join("palantir.log");
+    
+    if log_path.exists() {
+    
+        zip.start_file("snapshot/palantir.log", opts)
+            .map_err(|e| format!("start file {}: {}", log_path.display(), e))?;
+    
+        let mut f = File::open(&log_path)
+            .map_err(|e| format!("open {}: {}", log_path.display(), e))?;
+    
+        let mut buf = Vec::new();
+    
+        f.read_to_end(&mut buf)
+            .map_err(|e| format!("read {}: {}", log_path.display(), e))?;
+    
+        zip.write_all(&buf)
+            .map_err(|e| format!("write palantir.log into zip: {}", e))?;
+    } else {
+        return Err(format!("missing {}", log_path.display()));
     }
 
-    zip.finish().map_err(|e| e.to_string())?;
+    zip.finish()
+        .map_err(|e| format!("finish zip {}: {}", out_path.display(), e))?;
     Ok(out_path)
 }
+
 
 async fn upload_logs(server_base: &str, manifest: &Manifest, zip_path: &Path) -> Result<String, String> {
     let url = format!(
