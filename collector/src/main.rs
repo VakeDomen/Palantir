@@ -181,10 +181,10 @@ fn basename_from_args(args: &str) -> Option<String> {
 
 
 fn canonical_name(pid: i32, curr: &std::collections::HashMap<i32, PsRow>) -> String {
-    // climb up to 5 ancestors; prefer the real executable name
     let mut depth = 0;
     let mut p = pid;
-    while depth < 5 {
+    // climb ancestors; prefer the real executable name
+    while depth < 100 { 
         if let Some(row) = curr.get(&p) {
             if let Some(exe) = exe_basename(p) {
                 if !is_generic_child_name(&exe) { return exe; }
@@ -266,8 +266,10 @@ fn watch_processes(user: String, interval: Duration) -> anyhow::Result<()> {
 }
 
 fn main() -> anyhow::Result<()> {
-    let user = std::env::var("PAL_USER").unwrap_or_else(|_| "vake".to_string());
+    let user = std::env::var("MONITOR_USER").unwrap_or_else(|_| "exam".to_string());
     let poll_millis: u64 = std::env::var("PAL_PS_INTERVAL_MILLIS").ok().and_then(|s| s.parse().ok()).unwrap_or(500);
+    println!("MONITOR: {user}");
+
 
     let t_net = thread::spawn(move || {
         if let Err(e) = read_tshark() {

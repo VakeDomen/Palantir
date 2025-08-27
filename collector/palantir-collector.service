@@ -11,13 +11,8 @@ RestartSec=2
 CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN
 AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN
 NoNewPrivileges=true
-Environment=PALANTIR_COLLECTOR_LOG_DIR=/var/log/palantir-collector
-Environment=PALANTIR_COLLECTOR_MIN_UID=1000
-Environment=PALANTIR_COLLECTOR_ROTATE_MB=25
-Environment=PALANTIR_COLLECTOR_ROTATE_KEEP=5
-Environment=PALANTIR_COLLECTOR_OUTBOUND_ONLY=1
-# optional interface pin
-# Environment=PALANTIR_COLLECTOR_IFACE=eth0
+StandardOutput=file:/var/log/palantir-collector/out.log
+Environment=MONITOR_USER=vake
 
 ExecStartPre=/bin/mkdir -p /var/log/palantir-collector
 ExecStartPre=/bin/chmod 755 /var/log/palantir-collector
