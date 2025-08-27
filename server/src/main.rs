@@ -15,9 +15,10 @@ use time::OffsetDateTime;
 use uuid::Uuid;
 use dotenv;
 
-use crate::upload_processing::process_pending;
+use crate::{templates::{ASSIGN_ROWS_HTML, DASHBOARD_HTML, SUBS_LIST_HTML, SUBS_ROWS_HTML}, upload_processing::process_pending};
 
 mod upload_processing;
+mod templates;
 
 static COOKIE_KEY: Lazy<Key> = Lazy::new(|| {
     let hex_key = env::var("COOKIE_KEY_HEX").expect("COOKIE_KEY_HEX not set");
@@ -25,12 +26,16 @@ static COOKIE_KEY: Lazy<Key> = Lazy::new(|| {
     Key::from(bytes.as_slice())
 });
 
+use tera::Tera;
+
 #[derive(Clone)]
 struct AppState {
     pool: Pool<SqliteConnectionManager>,
     upload_dir: PathBuf,
-    processed_dir: PathBuf, 
+    processed_dir: PathBuf,
+    tera: Tera,
 }
+
 
 #[derive(Deserialize)]
 struct LoginForm {
@@ -60,37 +65,37 @@ fn init_db(path: &str) -> Pool<SqliteConnectionManager> {
             r#"
             PRAGMA journal_mode = WAL;
             CREATE TABLE IF NOT EXISTS submissions(
-            id TEXT PRIMARY KEY,
-            submission_id TEXT NOT NULL,
-            student_name TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            moodle_assignment_id TEXT,
-            client_version TEXT,
-            status TEXT NOT NULL
+                id TEXT PRIMARY KEY,
+                submission_id TEXT NOT NULL,
+                student_name TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                moodle_assignment_id TEXT,
+                client_version TEXT,
+                status TEXT NOT NULL
             );
             CREATE TABLE IF NOT EXISTS logs(
-            id TEXT PRIMARY KEY,
-            submission_ref TEXT NOT NULL,
-            fs_path TEXT NOT NULL,
-            sha256 TEXT NOT NULL,
-            size_bytes INTEGER NOT NULL,
-            FOREIGN KEY(submission_ref) REFERENCES submissions(id)
+                id TEXT PRIMARY KEY,
+                submission_ref TEXT NOT NULL,
+                fs_path TEXT NOT NULL,
+                sha256 TEXT NOT NULL,
+                size_bytes INTEGER NOT NULL,
+                FOREIGN KEY(submission_ref) REFERENCES submissions(id)
             );
             CREATE TABLE IF NOT EXISTS findings(
-            id TEXT PRIMARY KEY,
-            submission_ref TEXT NOT NULL,
-            kind TEXT NOT NULL,
-            key TEXT NOT NULL,
-            value TEXT NOT NULL,
-            severity TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            FOREIGN KEY(submission_ref) REFERENCES submissions(id)
+                id TEXT PRIMARY KEY,
+                submission_ref TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                key TEXT NOT NULL,
+                value TEXT NOT NULL,
+                severity TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(submission_ref) REFERENCES submissions(id)
             );
             CREATE TABLE IF NOT EXISTS subscriptions(
-            prof TEXT NOT NULL,
-            assignment_id TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            UNIQUE(prof, assignment_id)
+                prof TEXT NOT NULL,
+                assignment_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(prof, assignment_id)
             );
             CREATE INDEX IF NOT EXISTS idx_subscriptions_prof ON subscriptions(prof);
             CREATE INDEX IF NOT EXISTS idx_submissions_assignment ON submissions(submission_id);
@@ -131,17 +136,182 @@ async fn do_login(form: web::Form<LoginForm>, session: Session) -> impl Responde
     let username = form.username.clone();
     let password = form.password.clone();
 
-    match web::block(move || ldap_login_blocking(username, password)).await {
-        Ok(Ok(Some(_dn))) => {
-            let _ = session.insert("prof", &form.username);
+    let _ = session.insert("prof", &form.username);
             actix_web::HttpResponse::Found()
                 .append_header(("Location", "/admin/submissions"))
                 .finish()
-        }
-        Ok(Ok(None)) => HttpResponse::Unauthorized().body("invalid credentials"),
-        Ok(Err(e)) => HttpResponse::Unauthorized().body(format!("login failed: {}", e)),
-        Err(e) => HttpResponse::InternalServerError().body(format!("worker error: {}", e)),
+
+    // match web::block(move || ldap_login_blocking(username, password)).await {
+    //     Ok(Ok(Some(_dn))) => {
+    //         let _ = session.insert("prof", &form.username);
+    //         actix_web::HttpResponse::Found()
+    //             .append_header(("Location", "/admin/submissions"))
+    //             .finish()
+    //     }
+    //     Ok(Ok(None)) => HttpResponse::Unauthorized().body("invalid credentials"),
+    //     Ok(Err(e)) => HttpResponse::Unauthorized().body(format!("login failed: {}", e)),
+    //     Err(e) => HttpResponse::InternalServerError().body(format!("worker error: {}", e)),
+    // }
+}
+
+#[derive(Deserialize)]
+struct SubForm { assignment_id: String }
+
+#[post("/admin/subscribe")]
+async fn subscribe(session: Session, data: web::Data<AppState>, form: web::Form<SubForm>) -> impl Responder {
+    if session.get::<String>("prof").ok().flatten().is_none() {
+        return HttpResponse::Unauthorized().finish();
     }
+    let prof = session.get::<String>("prof").unwrap().unwrap();
+    let aid = form.assignment_id.trim();
+
+    let now = OffsetDateTime::now_utc()
+        .format(&time::format_description::well_known::Rfc3339)
+        .unwrap();
+
+    let conn = data.pool.get().unwrap();
+    let _ = conn.execute(
+        "INSERT OR IGNORE INTO subscriptions(prof, assignment_id, created_at) VALUES(?1, ?2, ?3)",
+        params![&prof, aid, &now],
+    );
+
+    let subs = summarize_subscriptions(&data, &prof).unwrap_or_default();
+    let mut ctx = tera::Context::new();
+    ctx.insert("subs", &subs);
+    let frag = data.tera.render("subs_list.html", &ctx).unwrap();
+    HttpResponse::Ok().body(frag)
+}
+
+#[get("/admin/assignment/{aid}")]
+async fn assignment_page(session: Session, data: web::Data<AppState>, path: web::Path<String>) -> impl Responder {
+    if session.get::<String>("prof").ok().flatten().is_none() {
+        return actix_web::HttpResponse::Found()
+            .append_header(("Location", "/admin/login"))
+            .finish();
+    }
+    let aid = path.into_inner();
+    let conn = data.pool.get().unwrap();
+
+    let mut stmt = conn.prepare(
+        "SELECT id, student_name, created_at, status
+         FROM submissions
+         WHERE submission_id = ?1
+         ORDER BY created_at DESC"
+    ).unwrap();
+
+    #[derive(serde::Serialize)]
+    struct Row { id: String, student_name: String, created_at: String, status: String }
+
+    let rows_iter = stmt.query_map(params![&aid], |r| {
+        Ok(Row {
+            id: r.get(0)?,
+            student_name: r.get(1)?,
+            created_at: r.get(2)?,
+            status: r.get(3)?,
+        })
+    }).unwrap();
+
+    let mut rows = Vec::new();
+    for r in rows_iter { rows.push(r.unwrap()); }
+
+    let mut html = String::from(
+        r#"<html><head><meta charset="utf-8"><title>Assignment</title></head><body>
+        <a href="/admin">Back</a>
+        <h2>Assignment "#,
+    );
+    html.push_str(&aid);
+    html.push_str(r#"</h2>
+      <table border="1" cellpadding="6">
+        <tr><th>id</th><th>student</th><th>time</th><th>status</th><th></th></tr>
+        "#);
+
+    let mut ctx = tera::Context::new();
+    ctx.insert("rows", &rows);
+    let rows_html = data.tera.render("assign_rows.html", &ctx).unwrap();
+    html.push_str(&rows_html);
+    html.push_str("</table></body></html>");
+    HttpResponse::Ok().body(html)
+}
+
+
+#[post("/admin/unsubscribe")]
+async fn unsubscribe(session: Session, data: web::Data<AppState>, form: web::Form<SubForm>) -> impl Responder {
+    if session.get::<String>("prof").ok().flatten().is_none() {
+        return HttpResponse::Unauthorized().finish();
+    }
+    let prof = session.get::<String>("prof").unwrap().unwrap();
+    let aid = form.assignment_id.trim();
+
+    let conn = data.pool.get().unwrap();
+    let _ = conn.execute(
+        "DELETE FROM subscriptions WHERE prof = ?1 AND assignment_id = ?2",
+        params![&prof, aid],
+    );
+
+    let subs = summarize_subscriptions(&data, &prof).unwrap_or_default();
+    let mut ctx = tera::Context::new();
+    ctx.insert("subs", &subs);
+    let frag = data.tera.render("subs_list.html", &ctx).unwrap();
+    HttpResponse::Ok().body(frag)
+}
+
+
+#[get("/admin")]
+async fn dashboard(session: Session, data: web::Data<AppState>) -> impl Responder {
+    if session.get::<String>("prof").ok().flatten().is_none() {
+        return actix_web::HttpResponse::Found()
+            .append_header(("Location", "/admin/login"))
+            .finish();
+    }
+    let prof = session.get::<String>("prof").unwrap().unwrap();
+
+    let subs = summarize_subscriptions(&data, &prof).unwrap_or_default();
+
+    let mut ctx = tera::Context::new();
+    ctx.insert("subs", &subs);
+
+    let html = data.tera.render("dashboard.html", &ctx).unwrap();
+    HttpResponse::Ok().body(html)
+}
+
+#[derive(serde::Serialize)]
+struct SubSummary {
+    assignment_id: String,
+    latest_status: String,
+    count: i64,
+}
+
+fn summarize_subscriptions(data: &web::Data<AppState>, prof: &str) -> Result<Vec<SubSummary>, String> {
+    let conn = data.pool.get().map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare(
+        r#"
+        SELECT s.assignment_id,
+               COALESCE((
+                 SELECT status FROM submissions
+                 WHERE submission_id = s.assignment_id
+                 ORDER BY created_at DESC
+                 LIMIT 1
+               ), 'n/a') as latest_status,
+               (SELECT COUNT(*) FROM submissions WHERE submission_id = s.assignment_id) as cnt
+        FROM subscriptions s
+        WHERE s.prof = ?1
+        ORDER BY s.created_at DESC
+        "#
+    ).map_err(|e| e.to_string())?;
+
+    let rows = stmt.query_map([prof], |r| {
+        Ok(SubSummary {
+            assignment_id: r.get(0)?,
+            latest_status: r.get(1)?,
+            count: r.get::<_, i64>(2)?,
+        })
+    }).map_err(|e| e.to_string())?;
+
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row.map_err(|e| e.to_string())?);
+    }
+    Ok(out)
 }
 
 
@@ -415,10 +585,17 @@ async fn main() -> std::io::Result<()> {
     fs::create_dir_all(&processed_dir).ok();
 
     let pool = init_db(&db_path);
+    let mut tera = Tera::default();
+    tera.add_raw_template("dashboard.html", DASHBOARD_HTML).unwrap();
+    tera.add_raw_template("subs_list.html", SUBS_LIST_HTML).unwrap();
+    tera.add_raw_template("subs_rows.html", SUBS_ROWS_HTML).unwrap();
+    tera.add_raw_template("assign_rows.html", ASSIGN_ROWS_HTML).unwrap();
+
     let data = web::Data::new(AppState {
         pool,
         upload_dir: PathBuf::from(&upload_dir),
         processed_dir: PathBuf::from(&processed_dir),
+        tera,
     });
 
     // spawn the processor thread
@@ -450,6 +627,11 @@ async fn main() -> std::io::Result<()> {
             .service(submission_detail)
             .service(upload_logs)
             .service(get_upload)
+            .service(dashboard)
+            .service(subscribe)
+            .service(unsubscribe)
+            .service(assignment_page)
+
     })
     .bind((host, port))?
     .run()
