@@ -10,10 +10,14 @@ use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::{env, fs, io::Write, path::PathBuf};
+use std::{env, fs, io::Write, path::PathBuf, thread, time::Duration};
 use time::OffsetDateTime;
 use uuid::Uuid;
 use dotenv;
+
+use crate::upload_processing::process_pending;
+
+mod upload_processing;
 
 static COOKIE_KEY: Lazy<Key> = Lazy::new(|| {
     let hex_key = env::var("COOKIE_KEY_HEX").expect("COOKIE_KEY_HEX not set");
@@ -25,6 +29,7 @@ static COOKIE_KEY: Lazy<Key> = Lazy::new(|| {
 struct AppState {
     pool: Pool<SqliteConnectionManager>,
     upload_dir: PathBuf,
+    processed_dir: PathBuf, 
 }
 
 #[derive(Deserialize)]
@@ -55,35 +60,42 @@ fn init_db(path: &str) -> Pool<SqliteConnectionManager> {
             r#"
             PRAGMA journal_mode = WAL;
             CREATE TABLE IF NOT EXISTS submissions(
-              id TEXT PRIMARY KEY,
-              submission_id TEXT NOT NULL,
-              student_name TEXT NOT NULL,
-              created_at TEXT NOT NULL,
-              moodle_assignment_id TEXT,
-              client_version TEXT,
-              status TEXT NOT NULL
+            id TEXT PRIMARY KEY,
+            submission_id TEXT NOT NULL,
+            student_name TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            moodle_assignment_id TEXT,
+            client_version TEXT,
+            status TEXT NOT NULL
             );
             CREATE TABLE IF NOT EXISTS logs(
-              id TEXT PRIMARY KEY,
-              submission_ref TEXT NOT NULL,
-              fs_path TEXT NOT NULL,
-              sha256 TEXT NOT NULL,
-              size_bytes INTEGER NOT NULL,
-              FOREIGN KEY(submission_ref) REFERENCES submissions(id)
+            id TEXT PRIMARY KEY,
+            submission_ref TEXT NOT NULL,
+            fs_path TEXT NOT NULL,
+            sha256 TEXT NOT NULL,
+            size_bytes INTEGER NOT NULL,
+            FOREIGN KEY(submission_ref) REFERENCES submissions(id)
             );
             CREATE TABLE IF NOT EXISTS findings(
-              id TEXT PRIMARY KEY,
-              submission_ref TEXT NOT NULL,
-              kind TEXT NOT NULL,
-              key TEXT NOT NULL,
-              value TEXT NOT NULL,
-              severity TEXT NOT NULL,
-              created_at TEXT NOT NULL,
-              FOREIGN KEY(submission_ref) REFERENCES submissions(id)
+            id TEXT PRIMARY KEY,
+            submission_ref TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            key TEXT NOT NULL,
+            value TEXT NOT NULL,
+            severity TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(submission_ref) REFERENCES submissions(id)
             );
-            "#,
-        )
-        .expect("migrations");
+            CREATE TABLE IF NOT EXISTS subscriptions(
+            prof TEXT NOT NULL,
+            assignment_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE(prof, assignment_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_subscriptions_prof ON subscriptions(prof);
+            CREATE INDEX IF NOT EXISTS idx_submissions_assignment ON submissions(submission_id);
+            "#
+        ).expect("migrations");
     }
     pool
 }
@@ -397,14 +409,30 @@ async fn main() -> std::io::Result<()> {
     let port: u16 = env::var("APP_PORT").ok().and_then(|s| s.parse().ok()).unwrap_or(8080);
     let db_path = env::var("SQLITE_PATH").unwrap_or_else(|_| "data/palantir.db".to_string());
     let upload_dir = env::var("UPLOAD_DIR").unwrap_or_else(|_| "uploads".to_string());
+    let processed_dir = "processed_uploads".to_string();
 
     fs::create_dir_all(&upload_dir).ok();
+    fs::create_dir_all(&processed_dir).ok();
 
     let pool = init_db(&db_path);
     let data = web::Data::new(AppState {
         pool,
-        upload_dir: PathBuf::from(upload_dir),
+        upload_dir: PathBuf::from(&upload_dir),
+        processed_dir: PathBuf::from(&processed_dir),
     });
+
+    // spawn the processor thread
+    {
+        let data_for_thread = data.clone();
+        thread::spawn(move || {
+            loop {
+                if let Err(e) = process_pending(&data_for_thread) {
+                    eprintln!("processor error: {e}");
+                }
+                thread::sleep(Duration::from_secs(2));
+            }
+        });
+    }
 
     println!("Rrunning server...");
 
@@ -427,3 +455,4 @@ async fn main() -> std::io::Result<()> {
     .run()
     .await
 }
+
