@@ -5,17 +5,17 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+LogsDirectory=palantir-collector
+LogsDirectoryMode=0755
+StandardOutput=file:/var/tmp/palantir.log
 ExecStart=/usr/local/bin/palantir-collector
+Environment=MONITOR_USER=vake
 Restart=always
 RestartSec=2
 CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN
 AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN
 NoNewPrivileges=true
-StandardOutput=file:/var/log/palantir-collector/out.log
-Environment=MONITOR_USER=vake
-
-ExecStartPre=/bin/mkdir -p /var/log/palantir-collector
-ExecStartPre=/bin/chmod 755 /var/log/palantir-collector
 
 [Install]
 WantedBy=multi-user.target
+
