@@ -1,0 +1,70 @@
+{# full-width card #}
+<div class="column is-12">
+  <div class="card" style="border-radius: 1rem;">
+    <header class="card-header">
+      <p class="card-header-title">{{ c.student_name }}</p>
+      <span class="card-header-icon">
+        {% if c.max_severity == "critical" %}
+          <span class="tag is-danger">high</span>
+        {% elif c.max_severity == "warn" %}
+          <span class="tag is-warning">mid</span>
+        {% else %}
+          <span class="tag">low</span>
+        {% endif %}
+      </span>
+    </header>
+
+    <div class="card-content">
+      <div class="level">
+        <div class="level-left">
+          <p class="is-size-7 has-text-grey">Submitted at {{ c.created_at_pretty }}</p>
+        </div>
+        <div class="level-right">
+          <span class="tag is-light">status: {{ c.status }}</span>
+        </div>
+      </div>
+
+      <div class="tags">
+        {% if c.first_ts_pretty %}<span class="tag is-light">first {{ c.first_ts_pretty }}</span>{% endif %}
+        {% if c.last_ts_pretty  %}<span class="tag is-light">last {{ c.last_ts_pretty }}</span>{% endif %}
+        {% if c.duration_minutes is defined %}
+          <span class="tag">duration: {{ c.duration_minutes }} min</span>
+        {% endif %}
+        {% if c.num_web_requests is defined %}
+          <span class="tag">web req: {{ c.num_web_requests }}</span>
+        {% endif %}
+        {% if c.had_browser %}
+          <span class="tag is-danger">browser: yes</span>
+        {% else %}
+          <span class="tag is-success">browser: no</span>
+        {% endif %}
+      </div>
+
+      <ul class="is-size-7">
+        {% if c.f.total_proc_starts is defined %}
+          <li><strong>proc starts</strong> {{ c.f.total_proc_starts }}</li>
+        {% endif %}
+        {% if c.f.unique_domains is defined %}
+          <li><strong>unique domains</strong> {{ c.f.unique_domains }}</li>
+        {% endif %}
+      </ul>
+
+      <div class="mt-3 is-flex is-align-items-center is-flex-wrap-wrap" style="gap:.5rem;">
+        {% for k, v in c.f %}
+          {% if k == "top_domain" %}
+            {% set parts = v | split(pat=":") %}
+            {% set dom = parts[0] %}
+            <img class="image is-24x24"
+                 src="https://icons.duckduckgo.com/ip3/{{ dom }}.ico"
+                 alt="{{ dom }}"
+                 title="{{ dom }}">
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+
+    <footer class="card-footer">
+      <a class="card-footer-item" href="/admin/submissions/{{ c.id }}">Open</a>
+    </footer>
+  </div>
+</div>

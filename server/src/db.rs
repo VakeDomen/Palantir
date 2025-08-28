@@ -275,3 +275,57 @@ pub fn add_log_artifact(
     .map_err(|e| e.to_string())?;
     Ok(id)
 }
+
+
+// in src/db.rs
+#[derive(serde::Serialize, Clone)]
+pub struct FindingRow {
+    pub submission_ref: String,
+    pub kind: String,
+    pub key: String,
+    pub value: String,
+    pub severity: String,
+}
+
+/// Fetch findings for a set of submission ids
+pub fn list_findings_for_submissions(
+    pool: &r2d2::Pool<r2d2_sqlite::SqliteConnectionManager>,
+    submission_ids: &[String],
+) -> Result<Vec<FindingRow>, String> {
+    if submission_ids.is_empty() {
+        return Ok(vec![]);
+    }
+    // build a dynamic IN clause safely
+    let placeholders = std::iter::repeat("?")
+        .take(submission_ids.len())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let sql = format!(
+        "SELECT submission_ref, kind, key, value, severity
+         FROM findings
+         WHERE submission_ref IN ({})",
+        placeholders
+    );
+
+    let conn = pool.get().map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+
+    let params = submission_ids.iter().map(|s| s as &dyn rusqlite::ToSql).collect::<Vec<_>>();
+    let rows = stmt
+        .query_map(params.as_slice(), |r| {
+            Ok(FindingRow {
+                submission_ref: r.get(0)?,
+                kind: r.get(1)?,
+                key: r.get(2)?,
+                value: r.get(3)?,
+                severity: r.get(4)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r.map_err(|e| e.to_string())?);
+    }
+    Ok(out)
+}

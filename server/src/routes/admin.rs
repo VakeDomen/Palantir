@@ -71,12 +71,49 @@ pub async fn assignment_page(session: Session, data: web::Data<AppState>, path: 
         return HttpResponse::Found().append_header(("Location", "/admin/login")).finish();
     }
     let aid = path.into_inner();
-    let rows = db::list_submissions_by_assignment(&data.pool, &aid).unwrap_or_default();
-    match template::assignment_page(&data.tera, &aid, &rows) {
+
+    // list submissions for this assignment
+    let rows = match db::list_submissions_by_assignment(&data.pool, &aid) {
+        Ok(v) => v,
+        Err(e) => return HttpResponse::InternalServerError().body(e),
+    };
+
+    // fetch findings in one shot
+    let ids: Vec<String> = rows.iter().map(|r| r.id.clone()).collect();
+    let findings = match db::list_findings_for_submissions(&data.pool, &ids) {
+        Ok(v) => v,
+        Err(e) => return HttpResponse::InternalServerError().body(e),
+    };
+
+    // build cards
+    let cards = template::build_cards(&rows, &findings);
+
+    // render card grid
+    match template::assignment_cards_page(&data.tera, &aid, &cards) {
         Ok(html) => HttpResponse::Ok().body(html),
         Err(e) => HttpResponse::InternalServerError().body(e.0),
     }
 }
+
+#[get("/admin/assignment/{aid}/cards")]
+pub async fn assignment_cards_fragment(
+    data: web::Data<AppState>,
+    path: web::Path<String>,
+) -> impl Responder {
+    let aid = path.into_inner();
+    let rows = db::list_submissions_by_assignment(&data.pool, &aid).unwrap_or_default();
+    let ids: Vec<String> = rows.iter().map(|r| r.id.clone()).collect();
+    let findings = db::list_findings_for_submissions(&data.pool, &ids).unwrap_or_default();
+    let cards = template::build_cards(&rows, &findings);
+
+    let mut ctx = tera::Context::new();
+    ctx.insert("cards", &cards);
+    match data.tera.render("components/assignment_cards_fragment.html", &ctx) {
+        Ok(html) => HttpResponse::Ok().body(html),
+        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+    }
+}
+
 
 #[get("/admin/submissions")]
 pub async fn submissions(session: Session, data: web::Data<AppState>) -> impl Responder {

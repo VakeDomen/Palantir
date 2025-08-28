@@ -43,9 +43,11 @@ fn analyze_zip(zip_path: PathBuf) -> Result<AnalysisResult, String> {
     // parse lines
     let mut first_ts: Option<String> = None;
     let mut last_ts: Option<String> = None;
-    let mut proc_starts = 0usize;
-    let mut proc_stops  = 0usize;
+    let mut proc_starts = 0;
+    let mut proc_stops  = 0;
+    let mut total_net_events: usize = 0;
     let mut procs: HashMap<String, usize> = HashMap::new();
+    let mut had_browser = false;
 
     let mut domains: HashMap<String, usize> = HashMap::new();
     let mut src_ips: HashMap<String, usize> = HashMap::new();
@@ -67,17 +69,24 @@ fn analyze_zip(zip_path: PathBuf) -> Result<AnalysisResult, String> {
             "proc" => {
                 let action = v.get("action").and_then(|x| x.as_str()).unwrap_or("");
                 let comm = v.get("comm").and_then(|x| x.as_str()).unwrap_or("unknown").to_string();
+
+                if ["firefox","chrome","chromium","brave","edge","opera"].iter().any(|b| comm.contains(b)) {
+                    had_browser = true;
+                    break;
+                }
                 if action == "start" { proc_starts += 1; }
                 if action == "stop"  { proc_stops  += 1; }
                 *procs.entry(comm).or_default() += 1;
             }
             "net" => {
+                total_net_events += 1;
                 if let Some(d) = v.get("dns_qname").and_then(|x| x.as_str()) {
                     *domains.entry(d.to_string()).or_default() += 1;
                 }
                 if let Some(ip) = v.get("src_ip").and_then(|x| x.as_str()) {
                     *src_ips.entry(ip.to_string()).or_default() += 1;
                 }
+                
             }
             _ => {}
         }
@@ -95,6 +104,25 @@ fn analyze_zip(zip_path: PathBuf) -> Result<AnalysisResult, String> {
     let now_rfc3339 = time::OffsetDateTime::now_utc()
         .format(&time::format_description::well_known::Rfc3339)
         .unwrap_or_else(|_| "now".to_string());
+
+    findings.push(Finding{
+        kind: "net".into(),
+        key: "total_net_events".into(),
+        value: total_net_events.to_string(),
+        severity: "info".into()
+    });
+
+    
+    findings.push(Finding{
+        kind: "net".into(),
+        key: "had_browser".into(),
+        value: had_browser.to_string(),
+        severity: if had_browser {
+            "warn".into()
+        } else {
+            "info".into()
+        }
+    });
 
     // basic metrics
     findings.push(Finding{ kind: "meta".into(), key: "zip_name".into(), value: zip_path.file_name().unwrap_or_default().to_string_lossy().to_string(), severity: "info".into() });

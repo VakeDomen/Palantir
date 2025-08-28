@@ -2,7 +2,7 @@
 <html>
   <head>
     {% include "partials/head_include.html" %}
-    <title>Assignment overview</title>
+    <title>Assignment {{ assignment_id }}</title>
   </head>
   <body>
     {% include "partials/navbar.html" %}
@@ -16,27 +16,34 @@
           </ul>
         </nav>
 
-        <div class="box" style="border-radius: 1rem;">
-          <div class="is-flex is-justify-content-space-between is-align-items-center mb-4">
-            <h2 class="title is-4 mb-0">Assignment {{ assignment_id }}</h2>
+        <aside class="menu">
+          <ul class="menu-list">
+            <li class="menuitem"
+                hx-trigger="click"
+                hx-get="/admin/assignment/{{ assignment_id }}/cards"
+                hx-target="#content"
+                hx-swap="innerHTML">
+              Submissions
+            </li>
+            <li class="menuitem"
+                hx-trigger="click"
+                hx-get="/admin/assignment/{{ assignment_id }}/stats"
+                hx-target="#content"
+                hx-swap="innerHTML">
+              Stats
+            </li>
+          </ul>
+        </aside>
+
+        <div id="content" class="mt-4">
+          <div class="columns is-multiline">
+            {% for c in cards %}
+              {% include "components/submission_card.html" %}
+            {% else %}
+              <p class="has-text-grey">No submissions yet.</p>
+            {% endfor %}
           </div>
 
-          <div class="table-container">
-            <table class="table is-fullwidth is-striped is-hoverable">
-              <thead>
-                <tr>
-                  <th>id</th>
-                  <th>student</th>
-                  <th>time</th>
-                  <th>status</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {% include "components/assign_rows.html" %}
-              </tbody>
-            </table>
-          </div>
         </div>
       </div>
     </section>
