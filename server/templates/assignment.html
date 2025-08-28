@@ -1,0 +1,44 @@
+<!doctype html>
+<html>
+  <head>
+    {% include "partials/head_include.html" %}
+    <title>Assignment overview</title>
+  </head>
+  <body>
+    {% include "partials/navbar.html" %}
+
+    <section class="section">
+      <div class="container">
+        <nav class="breadcrumb" aria-label="breadcrumbs">
+          <ul>
+            <li><a href="/admin">Dashboard</a></li>
+            <li class="is-active"><a aria-current="page">Assignment {{ assignment_id }}</a></li>
+          </ul>
+        </nav>
+
+        <div class="box" style="border-radius: 1rem;">
+          <div class="is-flex is-justify-content-space-between is-align-items-center mb-4">
+            <h2 class="title is-4 mb-0">Assignment {{ assignment_id }}</h2>
+          </div>
+
+          <div class="table-container">
+            <table class="table is-fullwidth is-striped is-hoverable">
+              <thead>
+                <tr>
+                  <th>id</th>
+                  <th>student</th>
+                  <th>time</th>
+                  <th>status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {% include "components/assign_rows.html" %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+  </body>
+</html>

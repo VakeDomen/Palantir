@@ -9,6 +9,7 @@ use tera::Tera;
 mod db;
 mod upload_processing;
 mod routes;
+mod template;
 
 use routes::{auth, admin, api, files};
 

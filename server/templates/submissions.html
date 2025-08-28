@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+  <head>
+      {% include "partials/head_include.html" %}
+      <title>Palantir submissions</title>
+  </head>
+  <body>
+    {% include "partials/navbar.html" %}
+    <div class="container">
+      <h2>Submissions</h2>
+      <a href="/admin/logout">Logout</a>
+      <table border="1" cellpadding="6">
+        <tr><th>id</th><th>submission</th><th>student</th><th>time</th><th>status</th></tr>
+        {% for r in rows %}
+          <tr>
+            <td><a href="/admin/submissions/{{ r.id }}">{{ r.id }}</a></td>
+            <td>n/a</td>
+            <td>{{ r.student_name }}</td>
+            <td>{{ r.created_at }}</td>
+            <td>{{ r.status }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="5">No submissions yet</td></tr>
+        {% endfor %}
+      </table>
+    </div>
+  </body>
+</html>

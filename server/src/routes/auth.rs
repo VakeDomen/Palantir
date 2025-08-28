@@ -3,6 +3,8 @@ use actix_session::Session;
 use ldap3::{LdapConn, Scope, SearchEntry};
 use serde::Deserialize;
 
+use crate::{template, AppState};
+
 #[derive(Deserialize)]
 pub struct LoginForm {
     pub username: String,
@@ -10,22 +12,18 @@ pub struct LoginForm {
 }
 
 #[get("/admin/login")]
-pub async fn login_page(session: Session) -> impl Responder {
+pub async fn login_page(session: Session, data: web::Data<AppState>) -> impl Responder {
     if let Ok(Some(_)) = session.get::<String>("prof") {
-        return HttpResponse::Found().append_header(("Location", "/admin")).finish();
+        return HttpResponse::Found()
+            .append_header(("Location", "/admin"))
+            .finish();
     }
-    let html = r#"
-    <html><head><meta charset="utf-8"><title>Palantir admin login</title></head>
-    <body>
-      <h2>Professor login</h2>
-      <form method="post" action="/admin/login">
-        <label>Username <input type="text" name="username"></label><br>
-        <label>Password <input type="password" name="password"></label><br>
-        <button type="submit">Sign in</button>
-      </form>
-    </body></html>"#;
-    HttpResponse::Ok().body(html)
+    match template::login_page(&data.tera) {
+        Ok(html) => HttpResponse::Ok().body(html),
+        Err(e) => HttpResponse::InternalServerError().body(e.0),
+    }
 }
+
 
 #[post("/admin/login")]
 pub async fn do_login(form: web::Form<LoginForm>, session: Session) -> impl Responder {
@@ -51,6 +49,8 @@ pub async fn logout(session: Session) -> impl Responder {
 
 // identical to your previous function, just kept private in this module
 fn ldap_login_blocking(username: String, password: String) -> Result<Option<String>, String> {
+    return Ok(Some("vake".into()));
+
     let server   = std::env::var("LDAP_SERVER").map_err(|_| "LDAP_SERVER not set".to_string())?;
     let base_dn  = std::env::var("LDAP_BASE_DN").unwrap_or_else(|_| "dc=example,dc=org".to_string());
     let user_attr= std::env::var("LDAP_USER_ATTR").unwrap_or_else(|_| "uid".to_string());

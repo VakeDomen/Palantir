@@ -1,22 +1,83 @@
 <!doctype html>
 <html>
-<head>
-  <meta charset="utf-8">
-  <title>Palantir dashboard</title>
-  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
-</head>
+  <head>
+        {% include "partials/head_include.html" %}
+        <title>Dashboard | Palantir</title>
+  </head>
 <body>
-  <h2>Dashboard</h2>
-  <a href="/admin/logout">Logout</a>
-  <form hx-post="/admin/subscribe" hx-target="#subs" hx-swap="outerHTML" style="margin:1rem 0">
-    <label>Find assignment
-      <input type="text" name="assignment_id" required>
-    </label>
-    <button type="submit">Subscribe</button>
-  </form>
+  {% include "partials/navbar.html" %}
+  <div class="container">
+     <section class="section">
+      <div class="container">
+        <div class="columns is-variable is-6">
+          <div class="column is-8-desktop is-10-tablet is-12-mobile">
+            <div class="box" style="border-radius: 1rem;">
+              <div class="is-flex is-justify-content-space-between is-align-items-center mb-4">
+                <h2 class="title is-4 mb-0">Dashboard</h2>
+                <span class="is-size-7 has-text-grey">Manage your assignment feeds</span>
+              </div>
 
-  <div id="subs">
-    {% include "subs_list.html" %}
+              <!-- Subscribe form -->
+              <form
+                hx-post="/admin/subscribe"
+                hx-target="#subs"
+                hx-swap="outerHTML"
+                class="mb-5"
+                autocomplete="off"
+              >
+                <div class="field">
+                  <label class="label" for="assignment_id">Find assignment</label>
+                  <div class="control has-icons-left">
+                    <input
+                      class="input"
+                      id="assignment_id"
+                      name="assignment_id"
+                      type="text"
+                      required
+                      placeholder="Enter assignment id (e.g. 86)"
+                    />
+                    <span class="icon is-left">
+                      <i class="fas fa-search" aria-hidden="true"></i>
+                    </span>
+                  </div>
+                  <p class="help">Subscribe to an assignment to see all related submissions.</p>
+                </div>
+
+                <div class="field is-grouped">
+                  <div class="control">
+                    <button type="submit" class="button">Subscribe</button>
+                  </div>
+                  <div class="control">
+                    <button type="reset" class="button is-light">Clear</button>
+                  </div>
+                </div>
+              </form>
+
+              <!-- Subscriptions list -->
+              <div id="subs">
+                {% include "components/assignment_list.html" %}
+              </div>
+            </div>
+          </div>
+
+          <!-- Optional side panel: quick tips / status -->
+          <div class="column is-4-desktop is-hidden-touch">
+            <div class="box" style="border-radius: 1rem;">
+              <h3 class="title is-6">Tips</h3>
+              <ul class="content is-small">
+                <li>Use the assignment id from the student manifest.</li>
+                <li>Click an assignment to view all recent submissions.</li>
+                <li>Unsubscribe anytime from the list actions.</li>
+              </ul>
+              <hr>
+              <p class="is-size-7 has-text-grey">
+                Need help? Contact the course admin.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
   </div>
 </body>
 </html>

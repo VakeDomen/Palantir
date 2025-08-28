@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+  <head>
+        {% include "partials/head_include.html" %}
+        <title>Submission {{id}} details</title>
+  </head>
+  <body>
+    <div class="container">
+      <a href="/admin/submissions">Back</a>
+      <h2>Submission {{ id }}</h2>
+      <p>
+        assignment {{ info.submission_id }}
+        by {{ info.student_name }}
+        at {{ info.created_at }}
+        status {{ info.status }}
+      </p>
+  
+      <h3>Artifacts</h3>
+      <ul>
+        {% for e in logs %}
+          {% set name = e.fs_path | split(pat="/") | last %}
+          <li>{{ name }} sha256 {{ e.sha256 }} size {{ e.size_bytes }} bytes</li>
+        {% else %}
+          <li>No artifacts</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </body>
+</html>
