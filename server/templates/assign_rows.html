@@ -1,0 +1,11 @@
+{% for r in rows %}
+<tr>
+  <td>{{ r.id }}</td>
+  <td>{{ r.student_name }}</td>
+  <td>{{ r.created_at }}</td>
+  <td>{{ r.status }}</td>
+  <td><a href="/admin/submissions/{{ r.id }}">open</a></td>
+</tr>
+{% else %}
+<tr><td colspan="5">No submissions for this assignment</td></tr>
+{% endfor %}

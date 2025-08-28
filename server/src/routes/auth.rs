@@ -1,0 +1,100 @@
+use actix_web::{get, post, web, HttpResponse, Responder};
+use actix_session::Session;
+use ldap3::{LdapConn, Scope, SearchEntry};
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+pub struct LoginForm {
+    pub username: String,
+    pub password: String,
+}
+
+#[get("/admin/login")]
+pub async fn login_page(session: Session) -> impl Responder {
+    if let Ok(Some(_)) = session.get::<String>("prof") {
+        return HttpResponse::Found().append_header(("Location", "/admin")).finish();
+    }
+    let html = r#"
+    <html><head><meta charset="utf-8"><title>Palantir admin login</title></head>
+    <body>
+      <h2>Professor login</h2>
+      <form method="post" action="/admin/login">
+        <label>Username <input type="text" name="username"></label><br>
+        <label>Password <input type="password" name="password"></label><br>
+        <button type="submit">Sign in</button>
+      </form>
+    </body></html>"#;
+    HttpResponse::Ok().body(html)
+}
+
+#[post("/admin/login")]
+pub async fn do_login(form: web::Form<LoginForm>, session: Session) -> impl Responder {
+    let username = form.username.clone();
+    let password = form.password.clone();
+
+    match web::block(move || ldap_login_blocking(username, password)).await {
+        Ok(Ok(Some(_dn))) => {
+            let _ = session.insert("prof", &form.username);
+            HttpResponse::Found().append_header(("Location", "/admin")).finish()
+        }
+        Ok(Ok(None)) => HttpResponse::Unauthorized().body("invalid credentials"),
+        Ok(Err(e)) => HttpResponse::Unauthorized().body(format!("login failed: {}", e)),
+        Err(e) => HttpResponse::InternalServerError().body(format!("worker error: {}", e)),
+    }
+}
+
+#[get("/admin/logout")]
+pub async fn logout(session: Session) -> impl Responder {
+    let _ = session.purge();
+    HttpResponse::Found().append_header(("Location", "/admin/login")).finish()
+}
+
+// identical to your previous function, just kept private in this module
+fn ldap_login_blocking(username: String, password: String) -> Result<Option<String>, String> {
+    let server   = std::env::var("LDAP_SERVER").map_err(|_| "LDAP_SERVER not set".to_string())?;
+    let base_dn  = std::env::var("LDAP_BASE_DN").unwrap_or_else(|_| "dc=example,dc=org".to_string());
+    let user_attr= std::env::var("LDAP_USER_ATTR").unwrap_or_else(|_| "uid".to_string());
+    let bind_dn  = std::env::var("LDAP_BIND_DN").ok();
+    let bind_pw  = std::env::var("LDAP_BIND_PASSWORD").ok();
+
+    let mut ldap = LdapConn::new(&server).map_err(|e| e.to_string())?;
+
+    if let (Some(dn), Some(pw)) = (bind_dn.as_deref(), bind_pw.as_deref()) {
+        ldap.simple_bind(dn, pw).map_err(|e| e.to_string())?
+            .success().map_err(|e| format!("{:?}", e))?;
+    }
+
+    let filter = format!("({}={})", user_attr, ldap_escape(&username));
+    let (rs, _res) = ldap
+        .search(&base_dn, Scope::Subtree, &filter, vec!["cn", "sn", "mail"])
+        .map_err(|e| e.to_string())?
+        .success()
+        .map_err(|e| format!("{:?}", e))?;
+
+    let first = match rs.into_iter().next() {
+        Some(e) => e,
+        None => {
+            let _ = ldap.unbind();
+            return Ok(None);
+        }
+    };
+
+    let entry = SearchEntry::construct(first);
+    let user_dn = entry.dn;
+
+    let bind = ldap.simple_bind(&user_dn, &password).map_err(|e| e.to_string())?;
+    let _ = ldap.unbind();
+
+    if bind.rc == 0 { Ok(Some(user_dn)) } else { Ok(None) }
+}
+
+fn ldap_escape(s: &str) -> String {
+    s.chars().flat_map(|c| match c {
+        '\\' => "\\5c".chars().collect::<Vec<_>>(),
+        '*'  => "\\2a".chars().collect(),
+        '('  => "\\28".chars().collect(),
+        ')'  => "\\29".chars().collect(),
+        '\0' => "\\00".chars().collect(),
+        _    => vec![c],
+    }).collect()
+}

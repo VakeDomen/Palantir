@@ -1,0 +1,15 @@
+{% for s in subs %}
+<tr>
+  <td><a href="/admin/assignment/{{ s.assignment_id }}">{{ s.assignment_id }}</a></td>
+  <td>{{ s.latest_status }}</td>
+  <td>{{ s.count }}</td>
+  <td>
+    <form hx-post="/admin/unsubscribe" hx-target="#subs" hx-swap="outerHTML" style="display:inline">
+      <input type="hidden" name="assignment_id" value="{{ s.assignment_id }}">
+      <button type="submit">Unsubscribe</button>
+    </form>
+  </td>
+</tr>
+{% else %}
+<tr><td colspan="4">No subscriptions yet</td></tr>
+{% endfor %}
