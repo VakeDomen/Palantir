@@ -16,25 +16,6 @@
           </ul>
         </nav>
 
-        <aside class="menu">
-          <ul class="menu-list">
-            <li class="menuitem"
-                hx-trigger="click"
-                hx-get="/admin/assignment/{{ assignment_id }}/cards"
-                hx-target="#content"
-                hx-swap="innerHTML">
-              Submissions
-            </li>
-            <li class="menuitem"
-                hx-trigger="click"
-                hx-get="/admin/assignment/{{ assignment_id }}/stats"
-                hx-target="#content"
-                hx-swap="innerHTML">
-              Stats
-            </li>
-          </ul>
-        </aside>
-
         <div id="content" class="mt-4">
           <div class="columns is-multiline">
             {% for c in cards %}

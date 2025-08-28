@@ -1,70 +1,148 @@
-{# full-width card #}
+{# templates/components/submission_card.html #}
 <div class="column is-12">
-  <div class="card" style="border-radius: 1rem;">
-    <header class="card-header">
-      <p class="card-header-title">{{ c.student_name }}</p>
-      <span class="card-header-icon">
-        {% if c.max_severity == "critical" %}
-          <span class="tag is-danger">high</span>
-        {% elif c.max_severity == "warn" %}
-          <span class="tag is-warning">mid</span>
-        {% else %}
-          <span class="tag">low</span>
-        {% endif %}
-      </span>
-    </header>
+    <div class="card is-hoverable" style="border-radius: 1rem;">
+        <header class="card-header">
+            <p class="card-header-title">
+                <span class="is-size-3 mr-3">{{ c.student_name }}</span>
 
-    <div class="card-content">
-      <div class="level">
-        <div class="level-left">
-          <p class="is-size-7 has-text-grey">Submitted at {{ c.created_at_pretty }}</p>
+                <span class="is-hidden-mobile">
+                    <span class="tag mr-3" title="When submission was uploaded"><strong>submitted</strong>&nbsp;{{
+                        c.created_at_pretty }}</span>
+                    {% if c.duration_minutes is defined %}
+                    <span class="tag mr-3" title="Duration of activity window"><strong>duration</strong>&nbsp;{{
+                        c.duration_minutes }} min</span>
+                    {% endif %}
+                    {% if c.f.seat_ip is defined %}
+                    <span class="tag mr-3" title="Local IP address of submitting machine"><strong>seat IP</strong>&nbsp;{{
+                        c.f.seat_ip }}</span>
+                    {% endif %}
+                    {% if c.f.device_key is defined %}
+                    <span class="tag mr-3" title="Machine/device identifier"><strong>device</strong>&nbsp;{{ c.f.device_key
+                        }}</span>
+                    {% endif %}
+                </span>
+
+            </p>
+            <span class="card-header-icon">
+                {% if c.max_severity == "critical" %}
+                <span class="tag is-danger" title="Overall risk level">high</span>
+                {% elif c.max_severity == "warn" %}
+                <span class="tag is-warning" title="Overall risk level">mid</span>
+                {% else %}
+                <span class="tag" title="Overall risk level">low</span>
+                {% endif %}
+            </span>
+        </header>
+
+        <div class="card-content">
+
+            {# primary facts row #}
+            <div class="level is-mobile" style="flex-wrap: wrap; gap:.5rem;">
+
+
+                {% if c.had_browser %}
+                <div class="level-item">
+                    <span class="tag is-danger" title="Was a browser process observed?">browser: yes</span>
+                </div>
+                {% endif %}
+
+                {% if c.num_web_requests is defined %}
+                <div class="level-item">
+                    <span class="tag" title="Total number of network requests"><strong>web req</strong>&nbsp;{{ c.num_web_requests }}</span>
+                </div>
+                {% endif %}
+
+
+                {% if c.f.top_runtime is defined %}
+                <div class="level-item">
+                    <span class="tag" title="Process with longest runtime"><strong>top runtime</strong>&nbsp;{{ c.f.top_runtime }}</span>
+                </div>
+                {% endif %}
+
+                {% if c.f.browser_runtime_seconds is defined %}
+                <div class="level-item">
+                    <span class="tag" title="Total seconds browser was active"><strong>browser sec</strong>&nbsp;{{ c.f.browser_runtime_seconds }}</span>
+                </div>
+                {% endif %}
+
+                {% if c.f.external_download_tool_count is defined %}
+                <div class="level-item">
+                    <span class="tag {% if c.f.external_download_tool_count | int > 0 %}is-warning{% endif %}" title="Download utilities detected (wget, curl…)">
+                        <strong>download tools</strong>&nbsp;{{ c.f.external_download_tool_count }}
+                    </span>
+                </div>
+                {% endif %}
+             
+                {% if c.f.qna_hits_total is defined %}
+                <div class="level-item">
+                    <span class="tag is-warning" title="Hits to Q&A sites (StackOverflow etc)"><strong>Q&A</strong>&nbsp;{{ c.f.qna_hits_total }}</span>
+                </div>
+                {% endif %}
+
+                {% if c.f.code_host_hits_total is defined %}
+                <div class="level-item">
+                    <span class="tag" title="Hits to code hosting (GitHub, GitLab…)"><strong>code host</strong>&nbsp;{{ c.f.code_host_hits_total }}</span>
+                </div>
+                {% endif %}
+
+                {% if c.f.search_hits_total is defined %}
+                <div class="level-item">
+                    <span class="tag" title="Hits to search engines"><strong>search</strong>&nbsp;{{ c.f.search_hits_total }}</span>
+                </div>
+                {% endif %}
+                
+                {% if c.f.pkg_hits_total is defined %}
+                <div class="level-item">
+                    <span class="tag is-warning" title="Package registries accessed"><strong>packages</strong>&nbsp;{{ c.f.pkg_hits_total }}</span>
+                </div>
+                {% endif %}
+
+                {% if c.f.cloud_hits_total is defined %}
+                <div class="level-item">
+                    <span class="tag is-warning" title="Cloud storage or paste sites accessed"><strong>cloud/paste</strong>&nbsp;{{ c.f.cloud_hits_total }}</span>
+                </div>
+                {% endif %}
+            
+                {% if c.f.remote_collab_tool_seen is defined and c.f.remote_collab_tool_seen == "true" %}
+                <div class="level-item">
+                    <span class="tag is-danger" title="Remote collaboration tool detected">remote tool</span>
+                </div>
+                {% endif %}
+
+
+                {% if c.f.ssh_activity is defined and c.f.ssh_activity == "true" %}
+                <div class="level-item">
+                    <span class="tag is-danger" title="SSH activity detected">ssh activity</span>
+                </div>
+                {% endif %}
+                
+
+                {% if c.f.ai_hits_total is defined %}
+                <div class="level-item">
+                    <span class="tag is-danger" title="Requests to AI providers"><strong>AI hits</strong>&nbsp;{{ c.f.ai_hits_total }}</span>
+                </div>
+                {% endif %}
+
+            </div>
+
+            
+            {# top domains as colored favicons #}
+            {% if c.top_domains | length > 0 %}
+            <div class="is-flex is-justify-content-right" style="gap:.5rem;">
+                {% for visit in c.top_domains %}
+                <img width="24" height="24"
+                    class="{% if visit.severity == 'critical' %}has-background-danger{% endif %}"
+                    style="display:inline-block; padding:3px; border-radius:4px;"
+                    src="https://www.google.com/s2/favicons?domain_url={{ visit.domain }}" alt="{{ visit.domain }}"
+                    title="Top domain: {{ visit.domain }}">
+                {% endfor %}
+            </div>
+            {% endif %}
+
         </div>
-        <div class="level-right">
-          <span class="tag is-light">status: {{ c.status }}</span>
-        </div>
-      </div>
 
-      <div class="tags">
-        {% if c.first_ts_pretty %}<span class="tag is-light">first {{ c.first_ts_pretty }}</span>{% endif %}
-        {% if c.last_ts_pretty  %}<span class="tag is-light">last {{ c.last_ts_pretty }}</span>{% endif %}
-        {% if c.duration_minutes is defined %}
-          <span class="tag">duration: {{ c.duration_minutes }} min</span>
-        {% endif %}
-        {% if c.num_web_requests is defined %}
-          <span class="tag">web req: {{ c.num_web_requests }}</span>
-        {% endif %}
-        {% if c.had_browser %}
-          <span class="tag is-danger">browser: yes</span>
-        {% else %}
-          <span class="tag is-success">browser: no</span>
-        {% endif %}
-      </div>
-
-      <ul class="is-size-7">
-        {% if c.f.total_proc_starts is defined %}
-          <li><strong>proc starts</strong> {{ c.f.total_proc_starts }}</li>
-        {% endif %}
-        {% if c.f.unique_domains is defined %}
-          <li><strong>unique domains</strong> {{ c.f.unique_domains }}</li>
-        {% endif %}
-      </ul>
-
-      <div class="mt-3 is-flex is-align-items-center is-flex-wrap-wrap" style="gap:.5rem;">
-        {% for k, v in c.f %}
-          {% if k == "top_domain" %}
-            {% set parts = v | split(pat=":") %}
-            {% set dom = parts[0] %}
-            <img class="image is-24x24"
-                 src="https://icons.duckduckgo.com/ip3/{{ dom }}.ico"
-                 alt="{{ dom }}"
-                 title="{{ dom }}">
-          {% endif %}
-        {% endfor %}
-      </div>
+        <footer class="card-footer">
+            <a class="card-footer-item" href="/admin/submissions/{{ c.id }}">Open</a>
+        </footer>
     </div>
-
-    <footer class="card-footer">
-      <a class="card-footer-item" href="/admin/submissions/{{ c.id }}">Open</a>
-    </footer>
-  </div>
 </div>

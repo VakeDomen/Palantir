@@ -72,6 +72,7 @@ pub fn assignment_cards_page(
     ctx.insert("cards", &cards);
     Ok(tera.render("assignment.html", &ctx)?)
 }
+
 #[derive(serde::Serialize)]
 pub struct SubmissionCard {
     pub id: String,
@@ -80,19 +81,25 @@ pub struct SubmissionCard {
     pub created_at_pretty: String,
     pub status: String,
     pub f: std::collections::HashMap<String, String>,
-
     pub first_ts_pretty: Option<String>,
     pub last_ts_pretty: Option<String>,
-    pub duration_minutes: Option<i64>,   // <—
-    pub had_browser: bool,               // <—
-    pub num_web_requests: Option<i64>,   // <—
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration_minutes: Option<i64>,
+    pub had_browser: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub num_web_requests: Option<i64>,
     pub max_severity: String,
+    pub top_domains: Vec<Visit>,
 }
 
+#[derive(serde::Serialize)]
+pub struct Visit {
+    pub domain: String,
+    pub severity: String,
+}
 
 pub fn build_cards(rows: &[SubmissionRow], findings: &[FindingRow]) -> Vec<SubmissionCard> {
-    use std::collections::HashMap;
-
+    use std::collections::{HashMap, HashSet};
     let mut by_sub: HashMap<&str, Vec<&FindingRow>> = HashMap::new();
     for f in findings { by_sub.entry(&f.submission_ref).or_default().push(f); }
 
@@ -101,35 +108,40 @@ pub fn build_cards(rows: &[SubmissionRow], findings: &[FindingRow]) -> Vec<Submi
     rows.iter().map(|r| {
         let mut fkv: HashMap<String, String> = HashMap::new();
         let mut max_sev = "info".to_string();
+        let mut top_domains = vec![];
+        let mut seen_dom = HashSet::new();
 
-        let mut had_browser = false;
         if let Some(fs) = by_sub.get(r.id.as_str()) {
             for f in fs {
+                // keep first value per key
                 fkv.entry(f.key.clone()).or_insert_with(|| f.value.clone());
-                if sev_rank(&f.severity) > sev_rank(&max_sev) {
-                    max_sev = f.severity.clone();
-                }
-
-                if f.key.eq("had_browser") {
-                    had_browser = f.value.parse().unwrap_or(false)
+                if sev_rank(&f.severity) > sev_rank(&max_sev) { max_sev = f.severity.clone(); }
+                if f.key == "top_domain" {
+                    if let Some(dom) = f.value.split(':').next() {
+                        if !seen_dom.insert(dom) { continue; }
+                        let mut severity = "info".to_string();
+                        if ai_provider_list().iter().any(|ai| dom.ends_with(ai) || dom.contains(ai)) {
+                            severity = "critical".into();
+                            max_sev = "critical".into();
+                        }
+                        top_domains.push(Visit{ domain: dom.to_string(), severity });
+                    }
                 }
             }
         }
 
-        // pretty timestamps
+        let had_browser: bool = fkv.get("had_browser").and_then(|v| v.parse().ok()).unwrap_or(false);
+
         let first_pretty = fkv.get("first_ts").map(|s| pretty_rfc3339(s));
         let last_pretty  = fkv.get("last_ts").map(|s| pretty_rfc3339(s));
 
-        // duration minutes
         let duration_minutes = match (fkv.get("first_ts").and_then(|s| parse_rfc3339(s)),
                                       fkv.get("last_ts").and_then(|s| parse_rfc3339(s))) {
             (Some(a), Some(b)) => Some(((b - a).whole_minutes()).max(0)),
             _ => None
         };
 
-        // number of web requests
-        let num_web_requests = fkv.get("total_net_events")
-            .and_then(|s| s.parse::<i64>().ok());
+        let num_web_requests = fkv.get("total_net_events").and_then(|s| s.parse::<i64>().ok());
 
         SubmissionCard {
             id: r.id.clone(),
@@ -144,9 +156,11 @@ pub fn build_cards(rows: &[SubmissionRow], findings: &[FindingRow]) -> Vec<Submi
             had_browser,
             num_web_requests,
             max_severity: max_sev,
+            top_domains,
         }
     }).collect()
 }
+
 
 fn pretty_rfc3339(s: &str) -> String {
     // fall back to raw string on any error
@@ -162,4 +176,110 @@ fn pretty_rfc3339(s: &str) -> String {
 
 fn parse_rfc3339(s: &str) -> Option<OffsetDateTime> {
     OffsetDateTime::parse(s, &Rfc3339).ok()
+}
+
+
+fn ai_provider_list() -> Vec<String>{
+    vec![
+        // OpenAI
+        "openai.com".into(),
+        "api.openai.com".into(),
+        "chat.openai.com".into(),
+        "chatgpt.com".into(),
+
+        // Anthropic
+        "anthropic.com".into(),
+        "api.anthropic.com".into(),
+        "claude.ai".into(),
+
+        // Google
+        "ai.google".into(),
+        "deepmind.com".into(),
+        "gemini.google.com".into(),
+        "makersuite.google.com".into(),
+        "bard.google.com".into(),
+
+        // Microsoft (Copilot / Azure OpenAI)
+        "copilot.microsoft.com".into(),
+        "copilot.azure.com".into(),
+        "azure.openai.com".into(),
+
+        // Meta (LLaMA etc.)
+        "ai.meta.com".into(),
+        "llama.meta.com".into(),
+
+        // Hugging Face
+        "huggingface.co".into(),
+        "api-inference.huggingface.co".into(),
+
+        // Perplexity
+        "perplexity.ai".into(),
+
+        // Mistral
+        "mistral.ai".into(),
+        "api.mistral.ai".into(),
+
+        // xAI
+        "x.ai".into(),
+        "grok.x.ai".into(),
+
+        // Cohere
+        "cohere.ai".into(),
+        "api.cohere.ai".into(),
+
+        // Stability
+        "stability.ai".into(),
+        "api.stability.ai".into(),
+
+        // Jasper
+        "jasper.ai".into(),
+
+        // You.com
+        "you.com".into(),
+        "api.you.com".into(),
+
+        // Character.AI
+        "character.ai".into(),
+
+        // Replit Ghostwriter
+        "replit.com".into(),
+
+        // Writesonic
+        "writesonic.com".into(),
+
+        // Copy.ai
+        "copy.ai".into(),
+
+        // Rytr
+        "rytr.me".into(),
+
+        // OpenRouter (AI model gateway / proxy)
+        "openrouter.ai".into(),
+        "api.openrouter.ai".into(),
+
+        // Poe (Quora's AI chat platform)
+        "poe.com".into(),
+
+        // Forefront AI
+        "forefront.ai".into(),
+
+        // AI21 Labs
+        "ai21.com".into(),
+        "studio.ai21.com".into(),
+        "api.ai21.com".into(),
+
+        // ElevenLabs (voice AI but still relevant)
+        "elevenlabs.io".into(),
+
+        // MidJourney (image AI via Discord primarily, but API domains exist)
+        "midjourney.com".into(),
+
+        // RunPod (hosted inference)
+        "runpod.io".into(),
+
+        // Replicate
+        "replicate.com".into(),
+        "api.replicate.com".into(),
+    ]
+
 }
