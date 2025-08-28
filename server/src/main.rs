@@ -89,6 +89,10 @@ async fn main() -> std::io::Result<()> {
             .service(admin::unsubscribe)
             .service(api::upload_logs)
             .service(files::get_upload)
+            .service(admin::net_timeline_json)
+            .service(admin::net_timeline_fragment)
+            .service(admin::proc_timeline_json)
+            .service(admin::proc_timeline_fragment)
     })
     .bind((host, port))?
     .run()

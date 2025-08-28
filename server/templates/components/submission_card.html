@@ -1,6 +1,11 @@
 {# templates/components/submission_card.html #}
 <div class="column is-12">
-    <div class="card is-hoverable" style="border-radius: 1rem;">
+    <div 
+        class="card assignment-card" 
+        style="border-radius: 1rem;" 
+        href="/admin/submissions/{{ c.id }}"
+        onclick="window.location='/admin/submissions/{{ c.id }}'"
+    >
         <header class="card-header">
             <p class="card-header-title">
                 <span class="is-size-3 mr-3">{{ c.student_name }}</span>
@@ -13,11 +18,13 @@
                         c.duration_minutes }} min</span>
                     {% endif %}
                     {% if c.f.seat_ip is defined %}
-                    <span class="tag mr-3" title="Local IP address of submitting machine"><strong>seat IP</strong>&nbsp;{{
+                    <span class="tag mr-3" title="Local IP address of submitting machine"><strong>seat
+                            IP</strong>&nbsp;{{
                         c.f.seat_ip }}</span>
                     {% endif %}
                     {% if c.f.device_key is defined %}
-                    <span class="tag mr-3" title="Machine/device identifier"><strong>device</strong>&nbsp;{{ c.f.device_key
+                    <span class="tag mr-3" title="Machine/device identifier"><strong>device</strong>&nbsp;{{
+                        c.f.device_key
                         }}</span>
                     {% endif %}
                 </span>
@@ -36,102 +43,104 @@
 
         <div class="card-content">
 
-        <div class="level">
-            <div class="level-left">
-                <div class="is-flex is-justify-content-left" style="gap:.5rem;">
+            <div class="level">
+                <div class="level-left">
+                    <div class="is-flex is-justify-content-left" style="gap:.5rem;">
 
 
-                    {% if c.had_browser %}
-                    <span class="tag is-danger" title="Was a browser process observed?">browser: yes</span>
-                    {% endif %}
+                        {% if c.had_browser %}
+                        <span class="tag is-danger" title="Was a browser process observed?">browser: yes</span>
+                        {% endif %}
 
-                    {% if c.num_web_requests is defined %}
-                    <span class="tag" title="Total number of network requests"><strong>web req</strong>&nbsp;{{
-                        c.num_web_requests }}</span>
-                    {% endif %}
-
-
-                    {% if c.f.top_runtime is defined %}
-                    <span class="tag" title="Process with longest runtime"><strong>top runtime</strong>&nbsp;{{
-                        c.f.top_runtime }}</span>
-                    {% endif %}
-
-                    {% if c.f.browser_runtime_seconds is defined %}
-                    <span class="tag" title="Total seconds browser was active"><strong>browser sec</strong>&nbsp;{{
-                        c.f.browser_runtime_seconds }}</span>
-                    {% endif %}
-
-                    {% if c.f.external_download_tool_count is defined %}
-                    <span class="tag {% if c.f.external_download_tool_count | int > 0 %}is-warning{% endif %}"
-                        title="Download utilities detected (wget, curl…)">
-                        <strong>download tools</strong>&nbsp;{{ c.f.external_download_tool_count }}
-                    </span>
-                    {% endif %}
-
-                    {% if c.f.qna_hits_total is defined %}
-                    <span class="tag is-warning"
-                        title="Hits to Q&A sites (StackOverflow etc)"><strong>Q&A</strong>&nbsp;{{ c.f.qna_hits_total
-                        }}</span>
-                    {% endif %}
-
-                    {% if c.f.code_host_hits_total is defined %}
-                    <span class="tag" title="Hits to code hosting (GitHub, GitLab…)"><strong>code host</strong>&nbsp;{{
-                        c.f.code_host_hits_total }}</span>
-                    {% endif %}
-
-                    {% if c.f.search_hits_total is defined %}
-                    <span class="tag" title="Hits to search engines"><strong>search</strong>&nbsp;{{
-                        c.f.search_hits_total }}</span>
-                    {% endif %}
-
-                    {% if c.f.pkg_hits_total is defined %}
-                    <span class="tag is-warning" title="Package registries accessed"><strong>packages</strong>&nbsp;{{
-                        c.f.pkg_hits_total }}</span>
-                    {% endif %}
-
-                    {% if c.f.cloud_hits_total is defined %}
-                    <span class="tag is-warning"
-                        title="Cloud storage or paste sites accessed"><strong>cloud/paste</strong>&nbsp;{{
-                        c.f.cloud_hits_total }}</span>
-                    {% endif %}
-
-                    {% if c.f.remote_collab_tool_seen is defined and c.f.remote_collab_tool_seen == "true" %}
-                    <span class="tag is-danger" title="Remote collaboration tool detected">remote tool</span>
-                    {% endif %}
+                        {% if c.num_web_requests is defined %}
+                        <span class="tag" title="Total number of network requests"><strong>web req</strong>&nbsp;{{
+                            c.num_web_requests }}</span>
+                        {% endif %}
 
 
-                    {% if c.f.ssh_activity is defined and c.f.ssh_activity == "true" %}
-                    <span class="tag is-danger" title="SSH activity detected">ssh activity</span>
-                    {% endif %}
+                        {% if c.f.top_runtime is defined %}
+                        <span class="tag" title="Process with longest runtime"><strong>top runtime</strong>&nbsp;{{
+                            c.f.top_runtime }}</span>
+                        {% endif %}
+
+                        {% if c.f.browser_runtime_seconds is defined %}
+                        <span class="tag" title="Total seconds browser was active"><strong>browser sec</strong>&nbsp;{{
+                            c.f.browser_runtime_seconds }}</span>
+                        {% endif %}
+
+                        {% if c.f.external_download_tool_count is defined %}
+                        <span class="tag {% if c.f.external_download_tool_count | int > 0 %}is-warning{% endif %}"
+                            title="Download utilities detected (wget, curl…)">
+                            <strong>download tools</strong>&nbsp;{{ c.f.external_download_tool_count }}
+                        </span>
+                        {% endif %}
+
+                        {% if c.f.qna_hits_total is defined %}
+                        <span class="tag is-warning"
+                            title="Hits to Q&A sites (StackOverflow etc)"><strong>Q&A</strong>&nbsp;{{
+                            c.f.qna_hits_total
+                            }}</span>
+                        {% endif %}
+
+                        {% if c.f.code_host_hits_total is defined %}
+                        <span class="tag" title="Hits to code hosting (GitHub, GitLab…)"><strong>code
+                                host</strong>&nbsp;{{
+                            c.f.code_host_hits_total }}</span>
+                        {% endif %}
+
+                        {% if c.f.search_hits_total is defined %}
+                        <span class="tag" title="Hits to search engines"><strong>search</strong>&nbsp;{{
+                            c.f.search_hits_total }}</span>
+                        {% endif %}
+
+                        {% if c.f.pkg_hits_total is defined %}
+                        <span class="tag is-warning"
+                            title="Package registries accessed"><strong>packages</strong>&nbsp;{{
+                            c.f.pkg_hits_total }}</span>
+                        {% endif %}
+
+                        {% if c.f.cloud_hits_total is defined %}
+                        <span class="tag is-warning"
+                            title="Cloud storage or paste sites accessed"><strong>cloud/paste</strong>&nbsp;{{
+                            c.f.cloud_hits_total }}</span>
+                        {% endif %}
+
+                        {% if c.f.remote_collab_tool_seen is defined and c.f.remote_collab_tool_seen == "true" %}
+                        <span class="tag is-danger" title="Remote collaboration tool detected">remote tool</span>
+                        {% endif %}
 
 
-                    {% if c.f.ai_hits_total is defined %}
-                    <span class="tag is-danger" title="Requests to AI providers"><strong>AI hits</strong>&nbsp;{{
-                        c.f.ai_hits_total }}</span>
-                    {% endif %}
+                        {% if c.f.ssh_activity is defined and c.f.ssh_activity == "true" %}
+                        <span class="tag is-danger" title="SSH activity detected">ssh activity</span>
+                        {% endif %}
+
+
+                        {% if c.f.ai_hits_total is defined %}
+                        <span class="tag is-danger" title="Requests to AI providers"><strong>AI hits</strong>&nbsp;{{
+                            c.f.ai_hits_total }}</span>
+                        {% endif %}
+
+                    </div>
 
                 </div>
 
-            </div>
 
-
-            <div class="level-right">
-                {% if c.top_domains | length > 0 %}
-                <div class="is-flex is-justify-content-right" style="gap:.5rem;">
-                    {% for visit in c.top_domains %}
-                    <img width="24" height="24"
-                        class="{% if visit.severity == 'critical' %}has-background-danger{% endif %}"
-                        style="display:inline-block; padding:3px; border-radius:4px;"
-                        src="https://www.google.com/s2/favicons?domain_url={{ visit.domain }}" alt="{{ visit.domain }}"
-                        title="Top 10 domains: {{ visit.domain }}">
-                    {% endfor %}
+                <div class="level-right">
+                    {% if c.top_domains | length > 0 %}
+                    <div class="is-flex is-justify-content-right" style="gap:.5rem;">
+                        {% for visit in c.top_domains %}
+                        <img width="24" height="24"
+                            class="{% if visit.severity == 'critical' %}has-background-danger{% endif %}"
+                            style="display:inline-block; padding:3px; border-radius:4px;"
+                            src="https://www.google.com/s2/favicons?domain_url={{ visit.domain }}"
+                            alt="{{ visit.domain }}" title="Top 10 domains: {{ visit.domain }}">
+                        {% endfor %}
+                    </div>
+                    {% endif %}
                 </div>
-                {% endif %}
             </div>
-        </div>        </div>
 
-        <footer class="card-footer">
-            <a class="card-footer-item" href="/admin/submissions/{{ c.id }}">Open</a>
-        </footer>
+
+        </div>
     </div>
 </div>

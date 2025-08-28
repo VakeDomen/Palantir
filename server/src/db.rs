@@ -77,6 +77,7 @@ pub struct SubmissionRow {
 
 #[derive(serde::Serialize)]
 pub struct SubmissionDetail {
+    pub moodle_assignment_id: String,
     pub submission_id: String,
     pub student_name: String,
     pub created_at: String,
@@ -192,7 +193,7 @@ pub fn list_recent_submissions(pool: &Pool<SqliteConnectionManager>, limit: i64)
 pub fn get_submission_detail(pool: &Pool<SqliteConnectionManager>, id: &str) -> Result<Option<SubmissionDetail>, String> {
     let conn = pool.get().map_err(|e| e.to_string())?;
     let mut stmt = conn.prepare(
-        "SELECT submission_id, student_name, created_at, status
+        "SELECT submission_id, student_name, created_at, status, moodle_assignment_id
          FROM submissions
          WHERE id = ?1"
     ).map_err(|e| e.to_string())?;
@@ -203,6 +204,7 @@ pub fn get_submission_detail(pool: &Pool<SqliteConnectionManager>, id: &str) -> 
             student_name: r.get(1)?,
             created_at: r.get(2)?,
             status: r.get(3)?,
+            moodle_assignment_id: r.get(4)?,
         })
     }).optional().map_err(|e| e.to_string())?;
 

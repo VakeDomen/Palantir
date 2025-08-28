@@ -1,30 +1,138 @@
 <!doctype html>
 <html>
-  <head>
-        {% include "partials/head_include.html" %}
-        <title>Submission {{id}} details</title>
-  </head>
-  <body>
-    {% include "partials/navbar.html" %}
+
+<head>
+  {% include "partials/head_include.html" %}
+  <title>Submission {{ id }} details</title>
+</head>
+
+<body>
+  {% include "partials/navbar.html" %}
+
+  <section class="section">
     <div class="container">
-      <a href="/admin/submissions">Back</a>
-      <h2>Submission {{ id }}</h2>
-      <p>
-        assignment {{ info.submission_id }}
-        by {{ info.student_name }}
-        at {{ info.created_at }}
-        status {{ info.status }}
-      </p>
-  
-      <h3>Artifacts</h3>
-      <ul>
-        {% for e in logs %}
-          {% set name = e.fs_path | split(pat="/") | last %}
-          <li>{{ name }} sha256 {{ e.sha256 }} size {{ e.size_bytes }} bytes</li>
-        {% else %}
-          <li>No artifacts</li>
-        {% endfor %}
-      </ul>
-    </div>
-  </body>
+
+      <nav class="breadcrumb" aria-label="breadcrumbs">
+        <ul>
+          <li><a href="/admin">Dashboard</a></li>
+          <li><a href="/admin/assignment/{{ info.moodle_assignment_id }}">Assignment {{ info.moodle_assignment_id }}</a>
+          </li>
+          <li class="is-active"><a aria-current="page">Submission {{ info.student_name }}</a></li>
+        </ul>
+      </nav>
+
+      <div class="columns">
+        <div class="column is-12">
+
+          <div class="card" style="border-radius: 1rem;">
+            <div class="card-content">
+              <div class="content">
+                <div class="meta-tags">
+                  <span class="tag" title="Assignment id from manifest">
+                    <strong>assignment</strong>&nbsp;{{ info.submission_id }}
+                  </span>
+                  <span class="tag" title="Student username">
+                    <strong>student</strong>&nbsp;{{ info.student_name }}
+                  </span>
+                  <span class="tag" title="When the server received this upload">
+                    <strong>received</strong>&nbsp;{{ info.created_at }}
+                  </span>
+                  <span
+                    class="tag {% if info.status == 'processed' %}is-success{% elif info.status == 'processing' %}is-warning{% else %}{% endif %}"
+                    title="Processing status">
+                    <strong>status</strong>&nbsp;{{ info.status }}
+                  </span>
+                </div>
+
+                <hr>
+
+                <h3 class="title is-5">Artifacts</h3>
+
+                <div class="table-container">
+                  <table class="table is-fullwidth is-striped is-hoverable">
+                    <thead>
+                      <tr>
+                        <th>File</th>
+                        <th class="nowrap">Size</th>
+                        <th>SHA-256</th>
+                        <th class="has-text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for e in logs %}
+                      {% set name = e.fs_path | split(pat="/") | last %}
+                      <tr>
+                        <td class="is-mono">
+                          <a href="/uploads/{{ name }}" title="Download artifact">{{ name }}</a>
+                        </td>
+                        <td class="nowrap" title="{{ e.size_bytes }} bytes">
+                          {{ e.size_bytes }} B
+                        </td>
+                        <td>
+                          <span class="is-mono" id="sha-{{ loop.index }}">{{ e.sha256 }}</span>
+                        </td>
+                        <td class="has-text-right">
+                          <button class="button is-small" type="button" title="Copy SHA-256"
+                            onclick="copyText('sha-{{ loop.index }}')">
+                            Copy hash
+                          </button>
+                          <a class="button is-small is-link" href="/uploads/{{ name }}" title="Download file">
+                            Download
+                          </a>
+                        </td>
+                      </tr>
+                      {% else %}
+                      <tr>
+                        <td colspan="4" class="has-text-grey">No artifacts</td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+
+
+                <hr>
+                <h3 class="title is-5" hx-trigger="load" hx-get="/admin/submissions/{{ id }}/net_timeline"
+                  hx-target="#net-timeline" hx-swap="innerHTML">Network timeline</h3>
+                <div class="buttons">
+
+                  </span>
+                </div>
+                <div id="net-timeline"></div>
+
+                <hr>
+                <h3 class="title is-5" hx-get="/admin/submissions/{{ id }}/proc_timeline" hx-target="#proc-timeline"
+                  hx-swap="outerHTML" hx-trigger="load">Process timeline</h3>
+
+                <div id="proc-timeline"></div>
+
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+  </section>
+
+  <script>
+    function copyText(id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const txt = el.textContent.trim();
+      navigator.clipboard?.writeText(txt).then(() => {
+        // optional: brief visual feedback
+      }).catch(() => {
+        // fallback
+        const ta = document.createElement('textarea');
+        ta.value = txt;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      });
+    }
+  </script>
+</body>
+
 </html>
