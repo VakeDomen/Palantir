@@ -51,7 +51,14 @@ pub async fn stats_shared_lan(data: web::Data<AppState>, path: web::Path<String>
             let v: Vec<String> = set.into_iter().collect();
             if v.len() > 1 { Some((ip, v)) } else { None }
         }).collect();
+
+    if rows.is_empty() {
+        return HttpResponse::Ok().finish();
+    }
+
+
     rows.sort_by(|a,b| b.1.len().cmp(&a.1.len()));
+
 
     let mut ctx = tera::Context::new();
     ctx.insert("rows", &rows);

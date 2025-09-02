@@ -30,28 +30,23 @@
           <div class="box">Loading status…</div>
         </div> -->
 
-        <div class="column is-6" hx-get="/admin/assignment/{{ assignment_id }}/stats_duration" hx-trigger="load"
-          hx-swap="innerHTML">
+        <div hx-get="/admin/assignment/{{ assignment_id }}/stats_duration" hx-trigger="load" hx-swap="outerHTML">
           <div class="box">Loading duration…</div>
         </div>
 
-        <div class="column is-6" hx-get="/admin/assignment/{{ assignment_id }}/stats_browser" hx-trigger="load"
-          hx-swap="innerHTML">
+        <div hx-get="/admin/assignment/{{ assignment_id }}/stats_browser" hx-trigger="load" hx-swap="outerHTML">
           <div class="box">Loading browsers…</div>
         </div>
 
-        <div class="column is-12" hx-get="/admin/assignment/{{ assignment_id }}/stats_domains" hx-trigger="load"
-          hx-swap="innerHTML">
+        <div hx-get="/admin/assignment/{{ assignment_id }}/stats_domains" hx-trigger="load" hx-swap="outerHTML">
           <div class="box">Loading domains…</div>
         </div>
 
-        <div class="column is-12" hx-get="/admin/assignment/{{ assignment_id }}/stats_outliers" hx-trigger="load"
-          hx-swap="innerHTML">
+        <div hx-get="/admin/assignment/{{ assignment_id }}/stats_outliers" hx-trigger="load" hx-swap="outerHTML">
           <div class="box">Scanning for outliers…</div>
         </div>
 
-        <div class="column is-12" hx-get="/admin/assignment/{{ assignment_id }}/stats_shared_lan" hx-trigger="load"
-          hx-swap="innerHTML">
+        <div hx-get="/admin/assignment/{{ assignment_id }}/stats_shared_lan" hx-trigger="load" hx-swap="outerHTML">
           <div class="box">Checking shared local IPs…</div>
         </div>
       </div>

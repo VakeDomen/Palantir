@@ -1,13 +1,12 @@
-<div class="box" style="border-radius:1rem;">
+<div class="box column is-12">
   <p class="is-size-6 has-text-weight-semibold">Top domains</p>
 
-  <div class="is-flex is-align-items-center is-flex-wrap-wrap" style="gap:.5rem;">
+  <div class="is-flex is-align-items-center is-flex-wrap-wrap">
     {% for d in domains %}
-      <img class="image is-24x24"
-           src="https://www.google.com/s2/favicons?domain_url={{ d }}"
-           alt="{{ d }}" title="{{ d }}">
+    <img class="image is-24x24" src="https://www.google.com/s2/favicons?domain_url={{ d }}" alt="{{ d }}"
+      title="{{ d }}">
     {% else %}
-      <span class="has-text-grey is-size-7">No domains</span>
+    <span class="has-text-grey is-size-7">No domains</span>
     {% endfor %}
   </div>
 
@@ -17,11 +16,12 @@
 </div>
 
 <script>
-(() => {
-  const ctx = document.getElementById("dom-{{ aid }}")?.getContext("2d");
-  if (!ctx) return;
-  const labels = {{ domains_json | safe }};
-  const data   = {{ hits_json    | safe }};
+  (() => {
+    const ctx = document.getElementById("dom-{{ aid }}")?.getContext("2d");
+    if (!ctx) return;
+    const labels = {{ domains_json | safe
+  }};
+  const data = {{ hits_json    | safe }};
   new Chart(ctx, {
     type: "bar",
     data: { labels, datasets: [{ label: "hits", data }] },
@@ -31,5 +31,5 @@
       scales: { y: { beginAtZero: true } }
     }
   });
-})();
+}) ();
 </script>

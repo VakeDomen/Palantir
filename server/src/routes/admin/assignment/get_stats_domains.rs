@@ -25,6 +25,12 @@ pub async fn stats_domains(data: web::Data<AppState>, path: web::Path<String>) -
         }
     }
     let mut top: Vec<(String, i64)> = map.into_iter().collect();
+
+    if top.is_empty() {
+        return HttpResponse::Ok().finish();
+    }
+
+
     top.sort_by(|a,b| b.1.cmp(&a.1));
     top.truncate(20);
 

@@ -56,13 +56,7 @@ pub async fn stats_outliers(data: web::Data<AppState>, path: web::Path<String>) 
     }
 
     if submision_net_events.is_empty() {
-        let mut ctx = tera::Context::new();
-        ctx.insert("rows", &Vec::<NetOut>::new());
-        let html = match data.tera.render("assignment/stats_outliers.html", &ctx) {
-            Ok(h) => h,
-            Err(e) => return HttpResponse::InternalServerError().body(format!("render error: {e}")),
-        };
-        return HttpResponse::Ok().body(html);
+        return HttpResponse::Ok().finish();
     }
 
     let totals: Vec<i64> = submision_net_events
@@ -118,6 +112,10 @@ pub async fn stats_outliers(data: web::Data<AppState>, path: web::Path<String>) 
     flagged.sort_by(|a, b| b.over_median.cmp(&a.over_median).then_with(|| b.total_net.cmp(&a.total_net)));
     flagged.truncate(8);
 
+    if flagged.is_empty() {
+        return HttpResponse::Ok().finish();
+    }
+
     let mut ctx = tera::Context::new();
     ctx.insert("rows", &flagged);
     ctx.insert("median", &med);
@@ -133,7 +131,7 @@ pub async fn stats_outliers(data: web::Data<AppState>, path: web::Path<String>) 
 fn median_i64(mut v: Vec<i64>) -> i64 {
     v.sort_unstable();
     let n = v.len();
-    if n % 2 == 1 { v[n/2] } else { ((v[n/2 - 1] + v[n/2]) / 2) }
+    if n % 2 == 1 { v[n/2] } else { (v[n/2 - 1] + v[n/2]) / 2 }
 }
 fn percentile_i64(mut v: Vec<i64>, p: f64) -> i64 {
     v.sort_unstable();

@@ -11,9 +11,7 @@ mod upload_processing;
 mod routes;
 mod template;
 
-use routes::{auth, api, files};
-
-use crate::routes::{admin, traffic_outliers};
+use routes::{auth, api, files, admin};
 
 static COOKIE_KEY: Lazy<Key> = Lazy::new(|| {
     let hex_key = env::var("COOKIE_KEY_HEX").expect("COOKIE_KEY_HEX not set");
@@ -46,8 +44,6 @@ async fn main() -> std::io::Result<()> {
     fs::create_dir_all(&upload_dir_abs).ok();
     fs::create_dir_all(&processed_dir).ok();
 
-    // load templates from ./templates
-    // in production you might want to embed; for now load from disk
     let tera = Tera::new("templates/**/*").expect("load templates");
 
     let pool = db::init_db(&db_path);
@@ -100,9 +96,9 @@ async fn main() -> std::io::Result<()> {
             .service(admin::assignment::get_stats_duration::stats_duration)
             .service(admin::assignment::get_stats_browser::stats_browser)
             .service(admin::assignment::get_stats_domains::stats_domains)
-            .service(traffic_outliers::stats_outliers)
+            .service(admin::assignment::get_stats_outliers::stats_outliers)
             .service(admin::assignment::get_stats_shared_lan::stats_shared_lan)
-            
+            .service(admin::dashboard::admin_root)            
         })
     .bind((host, port))?
     .run()
