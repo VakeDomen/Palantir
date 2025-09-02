@@ -1,0 +1,28 @@
+use actix_session::Session;
+use actix_web::{get, web, HttpResponse, Responder};
+
+use crate::{db, template, AppState};
+
+
+#[get("/admin")]
+pub async fn dashboard(session: Session, data: web::Data<AppState>) -> impl Responder {
+    if session.get::<String>("prof")
+        .ok()
+        .flatten()
+        .is_none() 
+    {
+        return HttpResponse::Found()
+            .append_header(("Location", "/admin/login"))
+            .finish();
+    }
+    let prof = session.get::<String>("prof")
+        .unwrap()
+        .unwrap();
+    let subs = db::list_subscription_summaries(&data.pool, &prof)
+        .unwrap_or_default();
+    
+    match template::dashboard(&data.tera, &subs) {
+        Ok(html) => HttpResponse::Ok().body(html),
+        Err(e) => HttpResponse::InternalServerError().body(e.0),
+    }
+}

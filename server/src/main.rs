@@ -11,9 +11,9 @@ mod upload_processing;
 mod routes;
 mod template;
 
-use routes::{auth, admin, api, files};
+use routes::{auth, api, files};
 
-use crate::routes::traffic_outliers;
+use crate::routes::{admin, traffic_outliers};
 
 static COOKIE_KEY: Lazy<Key> = Lazy::new(|| {
     let hex_key = env::var("COOKIE_KEY_HEX").expect("COOKIE_KEY_HEX not set");
@@ -84,26 +84,26 @@ async fn main() -> std::io::Result<()> {
             .service(auth::login_page)
             .service(auth::do_login)
             .service(auth::logout)
-            .service(admin::dashboard)
-            .service(admin::assignment_page)
-            .service(admin::submission_detail)
-            .service(admin::subscribe)
-            .service(admin::unsubscribe)
+            .service(admin::dashboard::dashboard)
+            .service(admin::assignment::page::assignment_page)
+            .service(admin::submission::page::submission_page)
+            .service(admin::subscribe::subscribe)
+            .service(admin::unsubscribe::unsubscribe)
             .service(api::upload_logs)
             .service(files::get_upload)
-            .service(admin::net_timeline_json)
-            .service(admin::net_timeline_fragment)
-            .service(admin::proc_timeline_json)
-            .service(admin::proc_timeline_fragment)
-            .service(admin::stats_activity)
-            .service(admin::stats_status)
-            .service(admin::stats_duration)
-            .service(admin::stats_browser)
-            .service(admin::stats_domains)
-            // .service(admin::stats_outliers)
+            .service(admin::submission::get_timeline_network::net_timeline_json)
+            .service(admin::submission::get_timeline_network::net_timeline_fragment)
+            .service(admin::submission::get_timeline_process::proc_timeline_json)
+            .service(admin::submission::get_timeline_process::proc_timeline_fragment)
+            .service(admin::assignment::get_stats_activity::stats_activity)
+            .service(admin::assignment::get_stats_status::stats_status)
+            .service(admin::assignment::get_stats_duration::stats_duration)
+            .service(admin::assignment::get_stats_browser::stats_browser)
+            .service(admin::assignment::get_stats_domains::stats_domains)
             .service(traffic_outliers::stats_outliers)
-            .service(admin::stats_shared_lan)
-    })
+            .service(admin::assignment::get_stats_shared_lan::stats_shared_lan)
+            
+        })
     .bind((host, port))?
     .run()
     .await
