@@ -21,7 +21,7 @@
               <form
                 hx-post="/admin/subscribe"
                 hx-target="#subs"
-                hx-swap="outerHTML"
+                hx-swap="innerHtml"
                 class="mb-5"
                 autocomplete="off"
               >
@@ -55,7 +55,7 @@
 
               <!-- Subscriptions list -->
               <div id="subs">
-                {% include "assignment/assignment_list.html" %}
+                {% include "dashboard/assignment_list.html" %}
               </div>
             </div>
           </div>

@@ -4,7 +4,7 @@
   <td>{{ s.latest_status }}</td>
   <td>{{ s.count }}</td>
   <td>
-    <form hx-post="/admin/unsubscribe" hx-target="#subs" hx-swap="outerHTML" style="display:inline">
+    <form hx-post="/admin/unsubscribe" hx-target="#subs" hx-swap="innerHtml" style="display:inline">
       <input type="hidden" name="assignment_id" value="{{ s.assignment_id }}">
       <button type="submit">Unsubscribe</button>
     </form>

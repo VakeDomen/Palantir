@@ -58,9 +58,12 @@ pub async fn subscribe(session: Session, data: web::Data<AppState>, form: web::F
 
     let _ = db::subscribe(&data.pool, &prof, &aid, &now);
     let subs = db::list_subscription_summaries(&data.pool, &prof).unwrap_or_default();
-    match template::subs_list(&data.tera, &subs) {
+    
+    let mut ctx = tera::Context::new();
+    ctx.insert("subs", &subs);
+    match data.tera.render("dashboard/assignment_list.html", &ctx) {
         Ok(frag) => HttpResponse::Ok().body(frag),
-        Err(e) => HttpResponse::InternalServerError().body(e.0),
+        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
     }
 }
 
@@ -72,9 +75,12 @@ pub async fn unsubscribe(session: Session, data: web::Data<AppState>, form: web:
 
     let _ = db::unsubscribe(&data.pool, &prof, &aid);
     let subs = db::list_subscription_summaries(&data.pool, &prof).unwrap_or_default();
-    match template::subs_list(&data.tera, &subs) {
+
+    let mut ctx = tera::Context::new();
+    ctx.insert("subs", &subs);
+    match data.tera.render("dashboard/assignment_list.html", &ctx) {
         Ok(frag) => HttpResponse::Ok().body(frag),
-        Err(e) => HttpResponse::InternalServerError().body(e.0),
+        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
     }
 }
 
@@ -127,21 +133,6 @@ pub async fn assignment_cards_fragment(
     }
 }
 
-
-#[get("/admin/submissions")]
-pub async fn submissions(session: Session, data: web::Data<AppState>) -> impl Responder {
-    if session.get::<String>("prof").ok().flatten().is_none() {
-        return actix_web::HttpResponse::Found()
-            .append_header(("Location", "/admin/login"))
-            .finish();
-    }
-
-    let rows = db::list_recent_submissions(&data.pool, 100).unwrap_or_default();
-    match template::submissions_page(&data.tera, &rows) {
-        Ok(html) => HttpResponse::Ok().body(html),
-        Err(e) => HttpResponse::InternalServerError().body(e.0),
-    }
-}
 
 #[get("/admin/submissions/{id}")]
 pub async fn submission_detail(

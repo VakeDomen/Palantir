@@ -86,7 +86,6 @@ async fn main() -> std::io::Result<()> {
             .service(auth::logout)
             .service(admin::dashboard)
             .service(admin::assignment_page)
-            .service(admin::submissions)
             .service(admin::submission_detail)
             .service(admin::subscribe)
             .service(admin::unsubscribe)
