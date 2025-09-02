@@ -16,7 +16,7 @@
                     <span class="tag mr-3" title="Duration of activity window"><strong>duration</strong>&nbsp;{{
                         c.duration_minutes }} min</span>
                     {% endif %}
-                    {% if c.f.seat_ip is defined %}
+                    <!-- {% if c.f.seat_ip is defined %}
                     <span class="tag mr-3" title="Local IP address of submitting machine"><strong>seat
                             IP</strong>&nbsp;{{
                         c.f.seat_ip }}</span>
@@ -25,11 +25,11 @@
                     <span class="tag mr-3" title="Machine/device identifier"><strong>device</strong>&nbsp;{{
                         c.f.device_key
                         }}</span>
-                    {% endif %}
+                    {% endif %} -->
                 </span>
 
             </p>
-            <span class="card-header-icon">
+            <!-- <span class="card-header-icon">
                 {% if c.max_severity == "critical" %}
                 <span class="tag is-danger" title="Overall risk level">high</span>
                 {% elif c.max_severity == "warn" %}
@@ -37,7 +37,7 @@
                 {% else %}
                 <span class="tag" title="Overall risk level">low</span>
                 {% endif %}
-            </span>
+            </span> -->
         </header>
 
         <div class="card-content">
@@ -45,7 +45,7 @@
             <div class="level">
                 <div class="level-left">
                     <div class="is-flex is-justify-content-left" style="gap:.5rem;">
-
+<!-- 
 
                         {% if c.had_browser %}
                         <span class="tag is-danger" title="Was a browser process observed?">browser: yes</span>
@@ -117,7 +117,7 @@
                         {% if c.f.ai_hits_total is defined %}
                         <span class="tag is-danger" title="Requests to AI providers"><strong>AI hits</strong>&nbsp;{{
                             c.f.ai_hits_total }}</span>
-                        {% endif %}
+                        {% endif %} -->
 
                     </div>
 
@@ -128,11 +128,13 @@
                     {% if c.top_domains | length > 0 %}
                     <div class="is-flex is-justify-content-right" style="gap:.5rem;">
                         {% for visit in c.top_domains %}
-                        <img width="24" height="24"
-                            class="{% if visit.severity == 'critical' %}has-background-danger{% endif %}"
-                            style="display:inline-block; padding:3px; border-radius:4px;"
-                            src="https://www.google.com/s2/favicons?domain_url={{ visit.domain }}"
-                            alt="{{ visit.domain }}" title="Top 10 domains: {{ visit.domain }}">
+                            {% if visit.severity == 'critical' %}
+                            <img width="24" height="24"
+                                class="is-rounded has-background-warning"
+                                style="display:inline-block; padding:3px; border-radius:4px;"
+                                src="https://www.google.com/s2/favicons?domain_url={{ visit.domain }}"
+                                alt="{{ visit.domain }}" title="Top 10 domains: {{ visit.domain }}">
+                            {% endif %}
                         {% endfor %}
                     </div>
                     {% endif %}
