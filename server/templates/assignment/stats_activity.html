@@ -1,0 +1,24 @@
+<div class="box" style="border-radius:1rem;">
+  <p class="is-size-6 has-text-weight-semibold mb-2">Submission activity</p>
+  <div id="actWrap-{{ aid }}" style="position:relative;width:100%;height:220px;">
+    <canvas id="act-{{ aid }}"></canvas>
+  </div>
+</div>
+<script>
+(() => {
+  const id = "{{ aid }}";
+  const labels = {{ labels_json | safe }};
+  const counts = {{ counts_json | safe }};
+  const ctx = document.getElementById("act-"+id)?.getContext("2d");
+  if (!ctx) return;
+  new Chart(ctx, {
+    type: "bar",
+    data: { labels, datasets: [{ label: "submissions", data: counts }] },
+    options: {
+      maintainAspectRatio: false,
+      scales: { x: { ticks: { autoSkip: true } }, y: { beginAtZero: true } },
+      plugins: { legend: { display:false } }
+    }
+  });
+})();
+</script>

@@ -13,6 +13,8 @@ mod template;
 
 use routes::{auth, admin, api, files};
 
+use crate::routes::traffic_outliers;
+
 static COOKIE_KEY: Lazy<Key> = Lazy::new(|| {
     let hex_key = env::var("COOKIE_KEY_HEX").expect("COOKIE_KEY_HEX not set");
     let bytes = hex::decode(hex_key).expect("invalid COOKIE_KEY_HEX");
@@ -78,13 +80,14 @@ async fn main() -> std::io::Result<()> {
                 .cookie_secure(false)
                 .cookie_content_security(CookieContentSecurity::Private)
                 .build())
+            .service(actix_files::Files::new("/static", ".").show_files_listing())
             .service(auth::login_page)
             .service(auth::do_login)
             .service(auth::logout)
             .service(admin::dashboard)
             .service(admin::assignment_page)
-            .service(admin::submissions)          // existing page kept if you still want it
-            .service(admin::submission_detail)    // existing detail page
+            .service(admin::submissions)
+            .service(admin::submission_detail)
             .service(admin::subscribe)
             .service(admin::unsubscribe)
             .service(api::upload_logs)
@@ -93,6 +96,14 @@ async fn main() -> std::io::Result<()> {
             .service(admin::net_timeline_fragment)
             .service(admin::proc_timeline_json)
             .service(admin::proc_timeline_fragment)
+            .service(admin::stats_activity)
+            .service(admin::stats_status)
+            .service(admin::stats_duration)
+            .service(admin::stats_browser)
+            .service(admin::stats_domains)
+            // .service(admin::stats_outliers)
+            .service(traffic_outliers::stats_outliers)
+            .service(admin::stats_shared_lan)
     })
     .bind((host, port))?
     .run()

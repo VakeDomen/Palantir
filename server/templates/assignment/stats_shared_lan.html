@@ -1,0 +1,38 @@
+<div class="box" style="border-radius:1rem;">
+
+  <div class="level">
+    <div class="level-left">
+      <p class="is-size-6 has-text-weight-semibold mb-2">Shared local IPs</p>
+    </div>
+    <div class="level-right">
+      <i class="fas fa-question" title="If one local IP submitted for more than one account"></i>
+    </div>
+  </div>
+
+  <table class="table is-fullwidth is-hoverable is-striped">
+    <thead>
+      <tr>
+        <th>local ip</th>
+        <th>students</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td class="is-family-monospace">{{ r.0 }}</td>
+        <td>
+          {% for s in r.1 %}
+          <span class="tag">{{ s }}</span>
+          {% endfor %}
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="2" class="has-text-grey">No overlaps found</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+
+
+  </table>
+</div>

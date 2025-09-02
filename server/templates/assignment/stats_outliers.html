@@ -1,0 +1,42 @@
+<div class="box" style="border-radius:1rem;">
+  <div class="level">
+    <div class="level-left">
+      <p class="is-size-6 has-text-weight-semibold mb-2">High traffic outliers</p>
+    </div>
+    <div class="level-right">
+      <span class="tag is-size-7">median {{ median }}</span>
+      <span class="tag is-size-7 ml-2">p95 {{ p95 }}</span>
+    </div>
+  </div>
+
+  <table class="table is-fullwidth is-hoverable is-striped">
+    <thead>
+      <tr>
+        <th>student</th>
+        <th class="has-text-right">total requests</th>
+        <th class="has-text-right">over median</th>
+        <th class="has-text-right">percentile</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td>{{ r.student }}</td>
+        <td class="has-text-right">{{ r.total_net }}</td>
+        <td class="has-text-right">+{{ r.over_median }}</td>
+        <td class="has-text-right">
+          <span class="tag {% if r.pctl >= 99 %}is-danger{% elif r.pctl >= 95 %}is-warning{% else %}is-light{% endif %}">
+            p{{ r.pctl }}
+          </span>
+        </td>
+        <td class="has-text-right">
+          <a class="button is-small" href="/admin/submissions/{{ r.sub_id }}">open</a>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="5" class="has-text-grey">No high-traffic outliers</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>

@@ -1,0 +1,19 @@
+<div class="box" style="border-radius:1rem;">
+  <p class="is-size-6 has-text-weight-semibold mb-2">Status breakdown</p>
+  <div style="position:relative;width:100%;height:220px;">
+    <canvas id="st-{{ aid }}"></canvas>
+  </div>
+</div>
+<script>
+(() => {
+  const ctx = document.getElementById("st-{{ aid }}")?.getContext("2d");
+  if (!ctx) return;
+  const labels = {{ labels_json }};
+  const counts = {{ counts_json }};
+  new Chart(ctx, {
+    type: "pie",
+    data: { labels, datasets: [{ data: counts }] },
+    options: { maintainAspectRatio: false, plugins: { legend: { position: "bottom" } } }
+  });
+})();
+</script>

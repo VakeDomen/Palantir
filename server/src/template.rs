@@ -26,14 +26,6 @@ pub fn subs_list(tera: &Tera, subs: &[SubSummary]) -> Result<String, RenderError
     Ok(tera.render("subs_list.html", &ctx)?)
 }
 
-pub fn assignment_page(tera: &Tera, assignment_id: &str, rows: &[SubmissionRow]) -> Result<String, RenderError> {
-    let mut ctx = Context::new();
-    ctx.insert("assignment_id", &assignment_id);
-    ctx.insert("rows", rows);
-    Ok(tera.render("assignment.html", &ctx)?)
-}
-
-
 /* Full page: recent submissions list */
 pub fn submissions_page(tera: &Tera, rows: &[SubmissionRow]) -> Result<String, RenderError> {
     let mut ctx = Context::new();

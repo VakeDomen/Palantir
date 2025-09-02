@@ -1,32 +1,74 @@
 <!doctype html>
 <html>
-  <head>
-    {% include "partials/head_include.html" %}
-    <title>Assignment {{ assignment_id }}</title>
-  </head>
-  <body>
-    {% include "partials/navbar.html" %}
 
-    <section class="section">
-      <div class="container">
-        <nav class="breadcrumb" aria-label="breadcrumbs">
-          <ul>
-            <li><a href="/admin">Dashboard</a></li>
-            <li class="is-active"><a aria-current="page">Assignment {{ assignment_id }}</a></li>
-          </ul>
-        </nav>
+<head>
+  {% include "partials/head_include.html" %}
+  <title>Assignment {{ assignment_id }}</title>
+</head>
 
-        <div id="content" class="mt-4">
-          <div class="columns is-multiline">
-            {% for c in cards %}
-              {% include "components/submission_card.html" %}
-            {% else %}
-              <p class="has-text-grey">No submissions yet.</p>
-            {% endfor %}
-          </div>
+<body>
+  {% include "partials/navbar.html" %}
 
+  <section class="section">
+    <div class="container">
+      <nav class="breadcrumb" aria-label="breadcrumbs">
+        <ul>
+          <li><a href="/admin">Dashboard</a></li>
+          <li class="is-active"><a aria-current="page">Assignment {{ assignment_id }}</a></li>
+        </ul>
+      </nav>
+
+
+      <div class="columns is-multiline">
+        <!-- <div class="column is-6" hx-get="/admin/assignment/{{ assignment_id }}/stats_activity" hx-trigger="load"
+          hx-swap="innerHTML">
+          <div class="box">Loading activity…</div>
+        </div> -->
+
+        <!-- <div class="column is-6" hx-get="/admin/assignment/{{ assignment_id }}/stats_status" hx-trigger="load"
+          hx-swap="innerHTML">
+          <div class="box">Loading status…</div>
+        </div> -->
+
+        <div class="column is-6" hx-get="/admin/assignment/{{ assignment_id }}/stats_duration" hx-trigger="load"
+          hx-swap="innerHTML">
+          <div class="box">Loading duration…</div>
+        </div>
+
+        <div class="column is-6" hx-get="/admin/assignment/{{ assignment_id }}/stats_browser" hx-trigger="load"
+          hx-swap="innerHTML">
+          <div class="box">Loading browsers…</div>
+        </div>
+
+        <div class="column is-12" hx-get="/admin/assignment/{{ assignment_id }}/stats_domains" hx-trigger="load"
+          hx-swap="innerHTML">
+          <div class="box">Loading domains…</div>
+        </div>
+
+        <div class="column is-12" hx-get="/admin/assignment/{{ assignment_id }}/stats_outliers" hx-trigger="load"
+          hx-swap="innerHTML">
+          <div class="box">Scanning for outliers…</div>
+        </div>
+
+        <div class="column is-12" hx-get="/admin/assignment/{{ assignment_id }}/stats_shared_lan" hx-trigger="load"
+          hx-swap="innerHTML">
+          <div class="box">Checking shared local IPs…</div>
         </div>
       </div>
-    </section>
-  </body>
+
+
+      <div id="content" class="mt-4">
+        <div class="columns is-multiline">
+          {% for c in cards %}
+          {% include "assignment/submission_card.html" %}
+          {% else %}
+          <p class="has-text-grey">No submissions yet.</p>
+          {% endfor %}
+        </div>
+
+      </div>
+    </div>
+  </section>
+</body>
+
 </html>

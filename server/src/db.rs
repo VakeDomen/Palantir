@@ -331,3 +331,18 @@ pub fn list_findings_for_submissions(
     }
     Ok(out)
 }
+
+
+pub fn fetch_durations_minutes(conn: &rusqlite::Connection, aid: &str) -> Vec<i64> {
+    let mut out = Vec::new();
+    let mut q = conn.prepare(
+      "SELECT value FROM findings f
+         JOIN submissions s ON s.id = f.submission_ref
+       WHERE s.submission_id = ?1 AND f.key = 'duration_minutes'"
+    ).unwrap();
+    let rows = q.query_map(params![aid], |r| r.get::<_, String>(0)).unwrap();
+    for r in rows {
+        if let Ok(s) = r { if let Ok(n) = s.parse::<i64>() { out.push(n); } }
+    }
+    out
+}
