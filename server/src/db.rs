@@ -39,7 +39,7 @@ pub fn init_db(path: &str) -> Pool<SqliteConnectionManager> {
               kind TEXT NOT NULL,
               key TEXT NOT NULL,
               value TEXT NOT NULL,
-              severity TEXT NOT NULL,
+
               created_at TEXT NOT NULL,
               FOREIGN KEY(submission_ref) REFERENCES submissions(id)
             );
@@ -286,7 +286,6 @@ pub struct FindingRow {
     pub kind: String,
     pub key: String,
     pub value: String,
-    pub severity: String,
 }
 
 /// Fetch findings for a set of submission ids
@@ -303,7 +302,7 @@ pub fn list_findings_for_submissions(
         .collect::<Vec<_>>()
         .join(", ");
     let sql = format!(
-        "SELECT submission_ref, kind, key, value, severity
+        "SELECT submission_ref, kind, key, value
          FROM findings
          WHERE submission_ref IN ({})",
         placeholders
@@ -320,7 +319,6 @@ pub fn list_findings_for_submissions(
                 kind: r.get(1)?,
                 key: r.get(2)?,
                 value: r.get(3)?,
-                severity: r.get(4)?,
             })
         })
         .map_err(|e| e.to_string())?;

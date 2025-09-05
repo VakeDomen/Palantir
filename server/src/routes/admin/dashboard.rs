@@ -1,5 +1,6 @@
 use actix_session::Session;
 use actix_web::{get, web, HttpResponse, Responder};
+use tera::Context;
 
 use crate::{db, template, AppState};
 
@@ -29,8 +30,10 @@ pub async fn dashboard(session: Session, data: web::Data<AppState>) -> impl Resp
     let subs = db::list_subscription_summaries(&data.pool, &prof)
         .unwrap_or_default();
     
-    match template::dashboard(&data.tera, &subs) {
+    let mut ctx = Context::new();
+    ctx.insert("subs", &subs);
+    match data.tera.render("dashboard/page.html", &ctx) {
         Ok(html) => HttpResponse::Ok().body(html),
-        Err(e) => HttpResponse::InternalServerError().body(e.0),
+        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
     }
 }

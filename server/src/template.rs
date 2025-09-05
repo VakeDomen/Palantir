@@ -2,7 +2,7 @@ use tera::{Context, Tera};
 use time::{format_description::{self, well_known::Rfc3339}, OffsetDateTime, UtcOffset};
 
 
-use crate::db::{FindingRow, LogRow, SubSummary, SubmissionDetail, SubmissionRow};
+use crate::{db::{FindingRow, LogRow, SubmissionDetail, SubmissionRow}, routes::admin::util::consts::AI_PROVIDER_BASES};
 
 #[derive(Debug)]
 pub struct RenderError(pub String);
@@ -11,12 +11,6 @@ impl From<tera::Error> for RenderError {
     fn from(e: tera::Error) -> Self { RenderError(e.to_string()) }
 }
 
-/// Render the full dashboard page with the subscription table
-pub fn dashboard(tera: &Tera, subs: &[SubSummary]) -> Result<String, RenderError> {
-    let mut ctx = Context::new();
-    ctx.insert("subs", subs);
-    Ok(tera.render("dashboard/page.html", &ctx)?)
-}
 
 /* Full page: one submission detail with artifacts */
 pub fn submission_detail_page(
@@ -80,7 +74,6 @@ pub fn build_cards(rows: &[SubmissionRow], findings: &[FindingRow]) -> Vec<Submi
     let mut by_sub: HashMap<&str, Vec<&FindingRow>> = HashMap::new();
     for f in findings { by_sub.entry(&f.submission_ref).or_default().push(f); }
 
-    fn sev_rank(s: &str) -> u8 { match s { "critical" => 3, "warn" => 2, _ => 1 } }
 
     rows.iter().map(|r| {
         let mut fkv: HashMap<String, String> = HashMap::new();
@@ -92,12 +85,11 @@ pub fn build_cards(rows: &[SubmissionRow], findings: &[FindingRow]) -> Vec<Submi
             for f in fs {
                 // keep first value per key
                 fkv.entry(f.key.clone()).or_insert_with(|| f.value.clone());
-                if sev_rank(&f.severity) > sev_rank(&max_sev) { max_sev = f.severity.clone(); }
                 if f.key == "top_domain" {
                     if let Some(dom) = f.value.split(':').next() {
                         if !seen_dom.insert(dom) { continue; }
                         let mut severity = "info".to_string();
-                        if ai_provider_list().iter().any(|ai| dom.ends_with(ai) || dom.contains(ai)) {
+                        if AI_PROVIDER_BASES.iter().any(|ai| dom.ends_with(ai) || dom.contains(ai)) {
                             severity = "critical".into();
                             max_sev = "critical".into();
                         }
@@ -153,110 +145,4 @@ fn pretty_rfc3339(s: &str) -> String {
 
 fn parse_rfc3339(s: &str) -> Option<OffsetDateTime> {
     OffsetDateTime::parse(s, &Rfc3339).ok()
-}
-
-
-fn ai_provider_list() -> Vec<String>{
-    vec![
-        // OpenAI
-        "openai.com".into(),
-        "api.openai.com".into(),
-        "chat.openai.com".into(),
-        "chatgpt.com".into(),
-
-        // Anthropic
-        "anthropic.com".into(),
-        "api.anthropic.com".into(),
-        "claude.ai".into(),
-
-        // Google
-        "ai.google".into(),
-        "deepmind.com".into(),
-        "gemini.google.com".into(),
-        "makersuite.google.com".into(),
-        "bard.google.com".into(),
-
-        // Microsoft (Copilot / Azure OpenAI)
-        "copilot.microsoft.com".into(),
-        "copilot.azure.com".into(),
-        "azure.openai.com".into(),
-
-        // Meta (LLaMA etc.)
-        "ai.meta.com".into(),
-        "llama.meta.com".into(),
-
-        // Hugging Face
-        "huggingface.co".into(),
-        "api-inference.huggingface.co".into(),
-
-        // Perplexity
-        "perplexity.ai".into(),
-
-        // Mistral
-        "mistral.ai".into(),
-        "api.mistral.ai".into(),
-
-        // xAI
-        "x.ai".into(),
-        "grok.x.ai".into(),
-
-        // Cohere
-        "cohere.ai".into(),
-        "api.cohere.ai".into(),
-
-        // Stability
-        "stability.ai".into(),
-        "api.stability.ai".into(),
-
-        // Jasper
-        "jasper.ai".into(),
-
-        // You.com
-        "you.com".into(),
-        "api.you.com".into(),
-
-        // Character.AI
-        "character.ai".into(),
-
-        // Replit Ghostwriter
-        "replit.com".into(),
-
-        // Writesonic
-        "writesonic.com".into(),
-
-        // Copy.ai
-        "copy.ai".into(),
-
-        // Rytr
-        "rytr.me".into(),
-
-        // OpenRouter (AI model gateway / proxy)
-        "openrouter.ai".into(),
-        "api.openrouter.ai".into(),
-
-        // Poe (Quora's AI chat platform)
-        "poe.com".into(),
-
-        // Forefront AI
-        "forefront.ai".into(),
-
-        // AI21 Labs
-        "ai21.com".into(),
-        "studio.ai21.com".into(),
-        "api.ai21.com".into(),
-
-        // ElevenLabs (voice AI but still relevant)
-        "elevenlabs.io".into(),
-
-        // MidJourney (image AI via Discord primarily, but API domains exist)
-        "midjourney.com".into(),
-
-        // RunPod (hosted inference)
-        "runpod.io".into(),
-
-        // Replicate
-        "replicate.com".into(),
-        "api.replicate.com".into(),
-    ]
-
 }

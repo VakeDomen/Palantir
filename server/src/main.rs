@@ -30,6 +30,8 @@ pub struct AppState {
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let _ = dotenv::dotenv();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+
 
     let host = env::var("APP_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
     let port: u16 = env::var("APP_PORT").ok().and_then(|s| s.parse().ok()).unwrap_or(8080);

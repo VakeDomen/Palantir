@@ -1,103 +1,39 @@
-use std::{collections::{HashMap, HashSet}, fs, path::PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    fs,
+    path::PathBuf,
+};
 
 use actix_web::web;
+use log::{debug, error, info, warn};
 use rusqlite::OptionalExtension;
+use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use uuid::Uuid;
 use zip::ZipArchive;
-use time::{format_description::well_known::Rfc3339, OffsetDateTime, UtcOffset};
 
-use crate::AppState;
-
+use crate::{
+    routes::admin::util::consts::{base_domain_guess, is_private_ipv4, name_is_in, AI_PROVIDER_BASES, BROWSERS, CLOUD_BASES, CODE_HOST_BASES, DOWNLOAD_TOOLS, FK_AI_DOMAIN, FK_AI_HITS_TOTAL, FK_AI_RATIO_PERCENT, FK_BROWSER_RUNTIME_SECONDS, FK_BURST_MAX_EVENTS_PER_MIN, FK_CLOUD_HITS, FK_CODE_HOST_HITS, FK_DEVICE_KEY, FK_DURATION_MINUTES, FK_EXTERNAL_DOWNLOAD_TOOL_COUNT, FK_FINAL5_NET_EVENTS, FK_FIRST_TS, FK_HAD_BROWSER, FK_LAST_TS, FK_LOOPBACK_DOMINATED, FK_MAX_IDLE_SECONDS, FK_PKG_HITS, FK_QNA_HITS, FK_REMOTE_COLLAB_TOOL_SEEN, FK_REQUESTS_PER_MIN, FK_SEARCH_HITS, FK_SEAT_IP, FK_SHELL_INVOCATIONS, FK_SSH_ACTIVITY, FK_TOP_DOMAIN, FK_TOP_PROC, FK_TOP_SRC_IP, FK_TOTAL_NET_EVENTS, FK_TOTAL_PROC_STARTS, FK_TOTAL_PROC_STOPS, FK_UNIQUE_DOMAINS, FK_ZIP_NAME, KIND_ANOMALY, KIND_META, KIND_NET, KIND_PROC, PKG_BASES, QNA_BASES, REMOTE_TOOLS, SEARCH_BASES, SEV_CRIT, SEV_INFO, SEV_WARN, SHELLS, SSH_LIKE}, AppState
+};
 
 struct Finding {
-    kind: String,     // proc, net, meta, anomaly
-    key: String,      // e.g. total_proc_starts, top_domain, first_ts
-    value: String,    // stringified value
-    severity: String, // info, warn, critical
+    kind: String,
+    key: String,
+    value: String,
 }
+
 struct AnalysisResult {
     findings: Vec<Finding>,
     now_rfc3339: String,
 }
 
-fn ai_provider_list() -> &'static [&'static str] {
-    &[
-        "openai.com","chatgpt.com",
-        "anthropic.com","claude.ai",
-        "ai.google","deepmind.com","google.com",
-        "microsoft.com","azure.com",
-        "mistral.ai","cohere.ai","stability.ai",
-        "ai21.com","perplexity.ai",
-        "huggingface.co","replicate.com","runpod.io",
-        "openrouter.ai","poe.com",
-        "x.ai","you.com","character.ai",
-        "elevenlabs.io","jasper.ai","writesonic.com","copy.ai","rytr.me",
-    ]
-}
-
-fn base_domain_guess(host: &str) -> String {
-    let mut parts: Vec<&str> = host
-        .split('.')
-        .filter(|s| !s.is_empty())
-        .collect();
-    if parts.len() >= 2 {
-        let last = parts.pop().unwrap();
-        let prev = parts.pop().unwrap();
-        format!("{prev}.{last}")
-    } else {
-        host.to_ascii_lowercase()
-    }
-}
-
-fn is_browser(comm: &str) -> bool {
-    let c = comm.to_ascii_lowercase();
-    ["firefox","chrome","chromium","brave","edge","opera"].iter().any(|b| c.contains(b))
-}
-fn is_shell(comm: &str) -> bool {
-    let c = comm.to_ascii_lowercase();
-    ["bash","zsh","fish","sh","dash"].iter().any(|b| c==*b || c.ends_with(format!("/{b}").as_str()))
-}
-fn is_remote_tool(comm: &str) -> bool {
-    let c = comm.to_ascii_lowercase();
-    ["anydesk","teamviewer","rustdesk","remmina","x11vnc","vino","vnc",
-     "zoom","teams","discord","slack"].iter().any(|b| c.contains(b))
-}
-fn is_ssh_like(comm: &str) -> bool {
-    let c = comm.to_ascii_lowercase();
-    ["ssh","scp","sftp","mosh"].iter().any(|b| c==*b || c.starts_with(&format!("{b} ")))
-}
-fn is_download_tool(comm: &str) -> bool {
-    let c = comm.to_ascii_lowercase();
-    ["curl","wget","pip","pip3","conda","npm","pnpm","yarn","apt","dnf","pacman"]
-        .iter().any(|b| c==*b || c.starts_with(&format!("{b} ")))
-}
-
-fn is_private_ipv4(ip: &str) -> bool {
-    ip.starts_with("10.")
-        || ip.starts_with("192.168.")
-        || ip.starts_with("172.16.")
-        || ip.starts_with("172.17.")
-        || ip.starts_with("172.18.")
-        || ip.starts_with("172.19.")
-        || ip.starts_with("172.20.")
-        || ip.starts_with("172.21.")
-        || ip.starts_with("172.22.")
-        || ip.starts_with("172.23.")
-        || ip.starts_with("172.24.")
-        || ip.starts_with("172.25.")
-        || ip.starts_with("172.26.")
-        || ip.starts_with("172.27.")
-        || ip.starts_with("172.28.")
-        || ip.starts_with("172.29.")
-        || ip.starts_with("172.30.")
-        || ip.starts_with("172.31.")
-}
-
 pub fn pretty_rfc3339(s: &str) -> String {
-    let Ok(dt) = OffsetDateTime::parse(s, &Rfc3339) else { return s.to_string(); };
-    let offset = UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC);
+    let Ok(dt) = OffsetDateTime::parse(s, &Rfc3339) else {
+        return s.to_string();
+    };
+    let offset = time::UtcOffset::current_local_offset().unwrap_or(time::UtcOffset::UTC);
     let local = dt.to_offset(offset);
-    let fmt = time::format_description::parse("[month repr:short] [day], [year] [hour]:[minute]").unwrap();
+    let fmt =
+        time::format_description::parse("[month repr:short] [day], [year] [hour]:[minute]").unwrap();
     local.format(&fmt).unwrap_or_else(|_| s.to_string())
 }
 
@@ -105,29 +41,20 @@ pub fn parse_rfc3339(s: &str) -> Option<OffsetDateTime> {
     OffsetDateTime::parse(s, &Rfc3339).ok()
 }
 
-
-fn ai_provider_suffixes() -> &'static [&'static str] {
-    &[
-        "openai.com","chatgpt.com",
-        "anthropic.com","claude.ai",
-        "ai.google","deepmind.com","google.com",   // gemini.google.com etc
-        "microsoft.com","azure.com",               // copilot, azure openai
-        "mistral.ai","cohere.ai","stability.ai",
-        "ai21.com","perplexity.ai",
-        "huggingface.co","replicate.com","runpod.io",
-        "openrouter.ai","poe.com",
-        "x.ai","you.com","character.ai",
-        "elevenlabs.io","jasper.ai","writesonic.com","copy.ai","rytr.me",
-    ]
-}
-
-
 fn analyze_zip(zip_path: PathBuf) -> Result<AnalysisResult, String> {
+    info!("analyze_zip: starting analysis for {}", zip_path.display());
+     
     use std::io::Read;
-    let mut zip_file = std::fs::File::open(&zip_path)
-        .map_err(|e| format!("open zip {}: {e}", zip_path.display()))?;
-    let mut archive = ZipArchive::new(&mut zip_file)
-        .map_err(|e| format!("read zip {}: {e}", zip_path.display()))?;
+    
+    let mut zip_file = std::fs::File::open(&zip_path).map_err(|e| {
+        error!("analyze_zip: failed to open zip {}: {}", zip_path.display(), e);
+        format!("open zip {}: {e}", zip_path.display())
+    })?;
+    
+    let mut archive = ZipArchive::new(&mut zip_file).map_err(|e| {
+        error!("analyze_zip: failed to read zip {}: {}", zip_path.display(), e);
+        format!("read zip {}: {e}", zip_path.display())
+    })?;
 
     // optional manifest
     let mut _manifest_json = String::new();
@@ -135,24 +62,36 @@ fn analyze_zip(zip_path: PathBuf) -> Result<AnalysisResult, String> {
         f.read_to_string(&mut _manifest_json).map_err(|e| e.to_string())?;
     }
 
+    if let Ok(mut f) = archive.by_name("manifest.json") {
+        if let Err(e) = f.read_to_string(&mut _manifest_json) {
+            warn!("analyze_zip: could not read manifest.json in {}: {}", zip_path.display(), e);
+        }
+    } else {
+        debug!("analyze_zip: no manifest.json in {}", zip_path.display());
+    }
+
     // log
     let mut log_buf = String::new();
     if let Ok(mut f) = archive.by_name("snapshot/palantir.log") {
-        f.read_to_string(&mut log_buf).map_err(|e| e.to_string())?;
+        if let Err(e) = f.read_to_string(&mut log_buf) {
+            error!("analyze_zip: failed reading snapshot/palantir.log in {}: {}", zip_path.display(), e);
+            return Err(e.to_string());
+        }
     } else {
+        error!("analyze_zip: missing snapshot/palantir.log in {}", zip_path.display());
         return Err("missing snapshot/palantir.log".to_string());
     }
 
-    // timebook
+    // time trackers
     let mut first_ts: Option<String> = None;
     let mut last_ts: Option<String> = None;
     let mut ts_prev: Option<OffsetDateTime> = None;
-    let mut max_idle: i64 = 0; // seconds
+    let mut max_idle: i64 = 0;
     let mut event_ts: Vec<OffsetDateTime> = Vec::new();
 
     // proc trackers
     let mut proc_starts = 0;
-    let mut proc_stops  = 0;
+    let mut proc_stops = 0;
     let mut procs: HashMap<String, usize> = HashMap::new();
     let mut had_browser = false;
     let mut browser_runtime_sec: i64 = 0;
@@ -174,91 +113,178 @@ fn analyze_zip(zip_path: PathBuf) -> Result<AnalysisResult, String> {
     let mut ai_hits_total = 0usize;
     let mut ai_domains: HashMap<String, usize> = HashMap::new();
 
-    // categories
+    // category counters
     let mut qna_hits = 0usize;
     let mut code_host_hits = 0usize;
     let mut search_hits = 0usize;
     let mut pkg_hits = 0usize;
     let mut cloud_hits = 0usize;
 
-    for line in log_buf.lines() {
-        let line = line.trim();
-        if line.is_empty() { continue; }
-        let v: serde_json::Value = match serde_json::from_str(line) { Ok(v) => v, Err(_) => continue };
-        let kind = v.get("kind").and_then(|k| k.as_str()).unwrap_or("");
-        let ts_s = v.get("ts").and_then(|x| x.as_str()).unwrap_or("").to_string();
+    for (lineno, raw) in log_buf.lines().enumerate() {
+        let line = raw.trim();
+        if line.is_empty() { 
+            continue; 
+        }
 
-        if !ts_s.is_empty() {
-            if first_ts.is_none() { first_ts = Some(ts_s.clone()); }
+        let v: serde_json::Value = match serde_json::from_str(line) {
+            Ok(v) => v,
+            Err(e) => {
+                warn!("analyze_zip: JSON parse error at line {} in {}: {} | snippet='{}'",
+                    lineno+1, zip_path.display(), e, &line.chars().take(120).collect::<String>());
+                continue;
+            }
+        };
+
+        let kind = v
+            .get("kind")
+            .and_then(|k| k.as_str())
+            .unwrap_or("");
+        let ts_s = v
+            .get("ts")
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        if ts_s.is_empty() {
+            debug!("analyze_zip: missing ts at line {} kind='{}' in {}", lineno+1, kind, zip_path.display());
+        } else {
+            if first_ts.is_none() { 
+                first_ts = Some(ts_s.clone()); 
+            }
+            
             last_ts = Some(ts_s.clone());
 
-            if let Some(curr) = parse_rfc3339(&ts_s) {
-                if let Some(prev) = ts_prev {
-                    let gap = (curr - prev).whole_seconds();
-                    if gap > max_idle { max_idle = gap; }
+            match parse_rfc3339(&ts_s) {
+                Some(curr) => {
+                    if let Some(prev) = ts_prev {
+                        let gap = (curr - prev).whole_seconds();
+                        if gap > max_idle { max_idle = gap; }
+                    }
+                    ts_prev = Some(curr);
+                    event_ts.push(curr);
                 }
-                ts_prev = Some(curr);
-                event_ts.push(curr);
+                None => {
+                    warn!("analyze_zip: bad timestamp at line {} -> '{}' in {}", lineno+1, ts_s, zip_path.display());
+                }
             }
         }
 
         match kind {
             "proc" => {
                 let action = v.get("action").and_then(|x| x.as_str()).unwrap_or("");
-                let comm = v.get("comm").and_then(|x| x.as_str()).unwrap_or("unknown").to_string();
-                let pid  = v.get("pid").and_then(|x| x.as_i64()).unwrap_or(-1);
+                let comm =
+                    v.get("comm").and_then(|x| x.as_str()).unwrap_or("unknown").to_string();
+                let pid = v.get("pid").and_then(|x| x.as_i64()).unwrap_or(-1);
 
                 if action == "start" {
                     proc_starts += 1;
                     *procs.entry(comm.clone()).or_default() += 1;
-                    if is_browser(&comm) { had_browser = true; }
-                    if is_shell(&comm) { shell_count += 1; }
-                    if is_remote_tool(&comm) { remote_flag = true; }
-                    if is_ssh_like(&comm) { ssh_flag = true; }
-                    if is_download_tool(&comm) { download_tool_count += 1; }
+                    if name_is_in(&comm, BROWSERS) {
+                        had_browser = true;
+                    }
+                    if name_is_in(&comm, SHELLS) {
+                        shell_count += 1;
+                    }
+                    if name_is_in(&comm, REMOTE_TOOLS) {
+                        remote_flag = true;
+                    }
+                    if name_is_in(&comm, SSH_LIKE) {
+                        ssh_flag = true;
+                    }
+                    if name_is_in(&comm, DOWNLOAD_TOOLS) {
+                        download_tool_count += 1;
+                    }
                     if let Some(t) = parse_rfc3339(&ts_s) {
                         pid_start.insert(pid, (comm.clone(), t));
                         orphaned.insert(pid);
                     }
                 } else if action == "stop" {
                     proc_stops += 1;
-                    orphaned.remove(&pid);
+                    if !orphaned.remove(&pid) {
+                        debug!("analyze_zip: stop for pid={} that wasn't marked running (line ~{})", pid, lineno+1);
+                    }
                     if let Some((c0, t0)) = pid_start.remove(&pid) {
                         if let Some(t1) = parse_rfc3339(&ts_s) {
-                            let secs = (t1 - t0).whole_seconds().max(0);
+                            let secs = (t1 - t0)
+                                .whole_seconds()
+                                .max(0);
+                            
                             *comm_runtime.entry(c0.clone()).or_default() += secs;
-                            if is_browser(&c0) { browser_runtime_sec += secs; }
-                            if is_shell(&c0) { shell_intervals.push((t0, t1)); }
-                            if is_browser(&c0) { browser_intervals.push((t0, t1)); }
+
+                            if name_is_in(&c0, BROWSERS) {
+                                browser_runtime_sec += secs;
+                                browser_intervals.push((t0, t1));
+                            }
+                            
+                            if name_is_in(&c0, SHELLS) {
+                                shell_intervals.push((t0, t1));
+                            }
+
+                        } else {
+                            warn!("analyze_zip: bad stop timestamp for pid={} comm='{}' at line {} in {}",
+                                pid, c0, lineno+1, zip_path.display());
                         }
+                    } else {
+                        warn!("analyze_zip: stop event without start for pid={} at line {} in {}",
+                            pid, lineno+1, zip_path.display());
                     }
                 }
+
             }
             "net" => {
                 total_net_events += 1;
-                if let Some(d) = v.get("dns_qname").and_then(|x| x.as_str()) {
+                if let Some(d) = v
+                    .get("dns_qname")
+                    .and_then(|x| x.as_str()) 
+                {
                     let host = d.to_string();
                     *domains.entry(host.clone()).or_default() += 1;
 
                     let base = base_domain_guess(&host);
-                    if ai_provider_list().iter().any(|s| base == *s) {
+                    if !base.contains('.') {
+                        debug!("analyze_zip: suspicious base domain derivation '{}' from host='{}'", base, host);
+                    }
+
+
+
+                    if AI_PROVIDER_BASES.iter().any(|s| base == *s) {
                         ai_hits_total += 1;
                         *ai_domains.entry(base.clone()).or_default() += 1;
                     }
-                    // categories
-                    if ["google.com","bing.com","duckduckgo.com"].iter().any(|s| base == *s) { search_hits += 1; }
-                    if ["stackoverflow.com","stackexchange.com"].iter().any(|s| base == *s) { qna_hits += 1; }
-                    if ["github.com","gitlab.com","bitbucket.org"].iter().any(|s| base == *s) { code_host_hits += 1; }
-                    if ["pypi.org","pythonhosted.org","npmjs.com","registry.npmjs.org","crates.io"].iter().any(|s| base == *s) { pkg_hits += 1; }
-                    if ["drive.google.com","dropbox.com","mega.nz","wetransfer.com","pastebin.com","hastebin.com","ghostbin.com"].iter().any(|s| base == *s) { cloud_hits += 1; }
+                    if SEARCH_BASES.iter().any(|s| base == *s) {
+                        search_hits += 1;
+                    }
+                    if QNA_BASES.iter().any(|s| base == *s) {
+                        qna_hits += 1;
+                    }
+                    if CODE_HOST_BASES.iter().any(|s| base == *s) {
+                        code_host_hits += 1;
+                    }
+                    if PKG_BASES.iter().any(|s| base == *s) {
+                        pkg_hits += 1;
+                    }
+                    if CLOUD_BASES.iter().any(|s| base == *s) {
+                        cloud_hits += 1;
+                    }
                 }
                 if let Some(ip) = v.get("src_ip").and_then(|x| x.as_str()) {
                     *src_ips.entry(ip.to_string()).or_default() += 1;
                 }
             }
-            _ => {}
+            _ => {
+                warn!("analyze_zip: unknown kind='{}' (line ~{}) in {}", kind, lineno+1, zip_path.display());
+            }
         }
     }
+
+
+    if !orphaned.is_empty() {
+        warn!("analyze_zip: {} processes never stopped (pids: first few {:?}) in {}",
+            orphaned.len(),
+            orphaned.iter().take(5).collect::<Vec<_>>(),
+            zip_path.display());
+    }
+
 
     // helpers
     fn top_k(map: &HashMap<String, usize>, k: usize) -> Vec<(String, usize)> {
@@ -267,12 +293,16 @@ fn analyze_zip(zip_path: PathBuf) -> Result<AnalysisResult, String> {
         v.truncate(k);
         v
     }
-    fn overlaps(a: &(OffsetDateTime, OffsetDateTime), b: &(OffsetDateTime, OffsetDateTime)) -> bool {
+    fn overlaps(
+        a: &(OffsetDateTime, OffsetDateTime),
+        b: &(OffsetDateTime, OffsetDateTime),
+    ) -> bool {
         a.0 <= b.1 && b.0 <= a.1
     }
 
     // intensity
     let burst_max_per_min = if event_ts.is_empty() {
+        debug!("analyze_zip: no timestamps collected from log in {}", zip_path.display());
         0
     } else {
         let mut by_min: HashMap<i64, i64> = HashMap::new();
@@ -282,115 +312,301 @@ fn analyze_zip(zip_path: PathBuf) -> Result<AnalysisResult, String> {
         }
         *by_min.values().max().unwrap_or(&0)
     };
-    let final5_net_events = if let (Some(a), Some(b)) = (first_ts.as_deref().and_then(parse_rfc3339), last_ts.as_deref().and_then(parse_rfc3339)) {
+
+
+    let final5_net_events = if let (Some(a), Some(b)) =
+        (first_ts.as_deref().and_then(parse_rfc3339), last_ts.as_deref().and_then(parse_rfc3339))
+    {
         let cutoff = b - time::Duration::minutes(5);
         event_ts.iter().filter(|t| **t >= cutoff && **t <= b).count() as i64
-    } else { 0 };
+    } else {
+        0
+    };
 
-    // top runtime
-    let top_runtime = comm_runtime.iter().max_by_key(|(_, s)| *s).map(|(c, s)| (c.clone(), *s)).unwrap_or(("".into(), 0));
-    let shell_and_browser_overlap = shell_intervals.iter().any(|s| browser_intervals.iter().any(|b| overlaps(s, b)));
-
-    // choose a seat IP from private IPs with highest count
-    let seat_ip_opt = src_ips.iter()
+    // seat IP
+    let seat_ip_opt = src_ips
+        .iter()
         .filter(|(ip, _)| is_private_ipv4(ip))
         .max_by_key(|(_, c)| **c)
         .map(|(ip, _)| ip.clone());
 
+    if let Some(ip) = &seat_ip_opt {
+        debug!("analyze_zip: selected seat_ip={}", ip);
+    } else {
+        debug!("analyze_zip: no private seat_ip detected");
+    }
+
+
     // build findings
     let mut findings = Vec::new();
-    let now_rfc3339 = OffsetDateTime::now_utc().format(&Rfc3339).unwrap_or_else(|_| "now".to_string());
+    let now_rfc3339 =
+        OffsetDateTime::now_utc().format(&Rfc3339).unwrap_or_else(|_| "now".to_string());
 
-    findings.push(Finding{ kind: "meta".into(), key: "zip_name".into(), value: zip_path.file_name().unwrap_or_default().to_string_lossy().to_string(), severity: "info".into() });
-    if let Some(ts) = &first_ts { findings.push(Finding{ kind: "meta".into(), key: "first_ts".into(), value: ts.clone(), severity: "info".into() }); }
-    if let Some(ts) = &last_ts  { findings.push(Finding{ kind: "meta".into(), key: "last_ts".into(),  value: ts.clone(), severity: "info".into() }); }
+    findings.push(Finding {
+        kind: KIND_NET.into(),
+        key: FK_QNA_HITS.into(),
+        value: qna_hits.to_string(),
+    });
 
-    if let (Some(a), Some(b)) = (first_ts.as_deref().and_then(parse_rfc3339), last_ts.as_deref().and_then(parse_rfc3339)) {
+    findings.push(Finding {
+        kind: KIND_NET.into(),
+        key: FK_CODE_HOST_HITS.into(),
+        value: code_host_hits.to_string(),
+    });
+
+    findings.push(Finding {
+        kind: KIND_NET.into(),
+        key: FK_SEARCH_HITS.into(),
+        value: search_hits.to_string(),
+    });
+
+    findings.push(Finding {
+        kind: KIND_NET.into(),
+        key: FK_PKG_HITS.into(),
+        value: pkg_hits.to_string(),
+    });
+
+    findings.push(Finding {
+        kind: KIND_NET.into(),
+        key: FK_CLOUD_HITS.into(),
+        value: cloud_hits.to_string(),
+    });
+
+
+    findings.push(Finding {
+        kind: KIND_META.into(),
+        key: FK_ZIP_NAME.into(),
+        value: zip_path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string(),
+    });
+
+    // zip name
+    findings.push(Finding {
+        kind: KIND_META.into(),
+        key: FK_ZIP_NAME.into(),
+        value: zip_path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string(),
+    });
+
+    // timestamps
+    if let Some(ts) = &first_ts {
+        findings.push(Finding {
+            kind: KIND_META.into(),
+            key: FK_FIRST_TS.into(),
+            value: ts.clone(),
+        });
+    }
+    if let Some(ts) = &last_ts {
+        findings.push(Finding {
+            kind: KIND_META.into(),
+            key: FK_LAST_TS.into(),
+            value: ts.clone(),
+        });
+    }
+
+    // duration & req/min
+    if let (Some(a), Some(b)) =
+        (first_ts.as_deref().and_then(parse_rfc3339), last_ts.as_deref().and_then(parse_rfc3339))
+    {
         let mins = (b - a).whole_minutes().max(0);
-        findings.push(Finding{ kind: "meta".into(), key: "duration_minutes".into(), value: mins.to_string(), severity: "info".into() });
+        findings.push(Finding {
+            kind: KIND_META.into(),
+            key: FK_DURATION_MINUTES.into(),
+            value: mins.to_string(),
+        });
+
         if mins > 0 {
             let rpm = (total_net_events as i64) / mins.max(1);
-            findings.push(Finding{ kind: "net".into(), key: "requests_per_min".into(), value: rpm.to_string(), severity: "info".into() });
+            findings.push(Finding {
+                kind: KIND_NET.into(),
+                key: FK_REQUESTS_PER_MIN.into(),
+                value: rpm.to_string(),
+            });
         }
     }
 
-    findings.push(Finding{ kind: "meta".into(), key: "max_idle_seconds".into(), value: max_idle.to_string(), severity: if max_idle >= 300 { "warn".into() } else { "info".into() } });
+    // idle time
+    findings.push(Finding {
+        kind: KIND_META.into(),
+        key: FK_MAX_IDLE_SECONDS.into(),
+        value: max_idle.to_string(),
+    });
 
-    findings.push(Finding{ kind: "proc".into(), key: "total_proc_starts".into(), value: proc_starts.to_string(), severity: "info".into() });
-    findings.push(Finding{ kind: "proc".into(), key: "total_proc_stops".into(),  value: proc_stops.to_string(),  severity: "info".into() });
+    // proc totals
+    findings.push(Finding {
+        kind: KIND_PROC.into(),
+        key: FK_TOTAL_PROC_STARTS.into(),
+        value: proc_starts.to_string(),
+    });
+    findings.push(Finding {
+        kind: KIND_PROC.into(),
+        key: FK_TOTAL_PROC_STOPS.into(),
+        value: proc_stops.to_string(),
+    });
+
+    // top procs
     for (comm, cnt) in top_k(&procs, 10) {
-        findings.push(Finding{ kind: "proc".into(), key: "top_proc".into(), value: format!("{comm}:{cnt}"), severity: "info".into() });
+        findings.push(Finding {
+            kind: KIND_PROC.into(),
+            key: FK_TOP_PROC.into(),
+            value: format!("{comm}:{cnt}"),
+        });
     }
-    if browser_runtime_sec > 0 {
-        findings.push(Finding{ kind: "proc".into(), key: "browser_runtime_seconds".into(), value: browser_runtime_sec.to_string(), severity: "info".into() });
-    }
-    findings.push(Finding{ kind: "proc".into(), key: "had_browser".into(), value: had_browser.to_string(), severity: if had_browser { "warn".into() } else { "info".into() } });
 
+    // browser runtime + presence
+    if browser_runtime_sec > 0 {
+        findings.push(Finding {
+            kind: KIND_PROC.into(),
+            key: FK_BROWSER_RUNTIME_SECONDS.into(),
+            value: browser_runtime_sec.to_string(),
+        });
+    }
+    findings.push(Finding {
+        kind: KIND_PROC.into(),
+        key: FK_HAD_BROWSER.into(),
+        value: had_browser.to_string(),
+    });
+
+    // shells / downloads / remote / ssh
     if shell_count > 0 {
-        findings.push(Finding{ kind: "proc".into(), key: "shell_invocations".into(), value: shell_count.to_string(), severity: "info".into() });
+        findings.push(Finding {
+            kind: KIND_PROC.into(),
+            key: FK_SHELL_INVOCATIONS.into(),
+            value: shell_count.to_string(),
+        });
     }
     if download_tool_count > 0 {
-        findings.push(Finding{ kind: "proc".into(), key: "external_download_tool_count".into(), value: download_tool_count.to_string(), severity: "warn".into() });
+        findings.push(Finding {
+            kind: KIND_PROC.into(),
+            key: FK_EXTERNAL_DOWNLOAD_TOOL_COUNT.into(),
+            value: download_tool_count.to_string(),
+        });
     }
     if remote_flag {
-        findings.push(Finding{ kind: "anomaly".into(), key: "remote_collab_tool_seen".into(), value: "true".into(), severity: "critical".into() });
+        findings.push(Finding {
+            kind: KIND_ANOMALY.into(),
+            key: FK_REMOTE_COLLAB_TOOL_SEEN.into(),
+            value: "true".into(),
+        });
     }
     if ssh_flag {
-        findings.push(Finding{ kind: "anomaly".into(), key: "ssh_activity".into(), value: "true".into(), severity: "warn".into() });
+        findings.push(Finding {
+            kind: KIND_ANOMALY.into(),
+            key: FK_SSH_ACTIVITY.into(),
+            value: "true".into(),
+        });
     }
 
-    findings.push(Finding{ kind: "net".into(), key: "total_net_events".into(), value: total_net_events.to_string(), severity: "info".into() });
-    findings.push(Finding{ kind: "net".into(), key: "unique_domains".into(), value: domains.len().to_string(), severity: "info".into() });
+    // net counts
+    findings.push(Finding {
+        kind: KIND_NET.into(),
+        key: FK_TOTAL_NET_EVENTS.into(),
+        value: total_net_events.to_string(),
+    });
+    findings.push(Finding {
+        kind: KIND_NET.into(),
+        key: FK_UNIQUE_DOMAINS.into(),
+        value: domains.len().to_string(),
+    });
     for (d, cnt) in top_k(&domains, 10) {
-        findings.push(Finding{ kind: "net".into(), key: "top_domain".into(), value: format!("{d}:{cnt}"), severity: "info".into() });
+        findings.push(Finding {
+            kind: KIND_NET.into(),
+            key: FK_TOP_DOMAIN.into(),
+            value: format!("{d}:{cnt}"),
+        });
     }
 
+    // top src IPs
     for (ip, cnt) in top_k(&src_ips, 5) {
-        findings.push(Finding{ kind: "net".into(), key: "top_src_ip".into(), value: format!("{ip}:{cnt}"), severity: "info".into() });
-    }
-    if let Some(seat_ip) = seat_ip_opt {
-        findings.push(Finding{ kind: "meta".into(), key: "seat_ip".into(), value: seat_ip.clone(), severity: "info".into() });
-        // also store a device_key you can join across submissions later
-        findings.push(Finding{ kind: "meta".into(), key: "device_key".into(), value: seat_ip, severity: "info".into() });
+        findings.push(Finding {
+            kind: KIND_NET.into(),
+            key: FK_TOP_SRC_IP.into(),
+            value: format!("{ip}:{cnt}"),
+        });
     }
 
+    // seat ip / device key (best private IP)
+    if let Some(seat_ip) = seat_ip_opt {
+        findings.push(Finding {
+            kind: KIND_META.into(),
+            key: FK_SEAT_IP.into(),
+            value: seat_ip.clone(),
+        });
+        findings.push(Finding {
+            kind: KIND_META.into(),
+            key: FK_DEVICE_KEY.into(),
+            value: seat_ip,
+        });
+    }
+
+    // AI totals / domains / ratio
     if ai_hits_total > 0 {
-        findings.push(Finding{ kind: "anomaly".into(), key: "ai_hits_total".into(), value: ai_hits_total.to_string(), severity: "warn".into() });
+        findings.push(Finding {
+            kind: KIND_ANOMALY.into(),
+            key: FK_AI_HITS_TOTAL.into(),
+            value: ai_hits_total.to_string(),
+        });
         for (bd, cnt) in top_k(&ai_domains, 10) {
-            findings.push(Finding{ kind: "net".into(), key: "ai_domain".into(), value: format!("{bd}:{cnt}"), severity: "warn".into() });
+            findings.push(Finding {
+                kind: KIND_NET.into(),
+                key: FK_AI_DOMAIN.into(),
+                value: format!("{bd}:{cnt}"),
+            });
         }
         let dns_total = domains.values().sum::<usize>() as f64;
         if dns_total > 0.0 {
             let pct = ((ai_hits_total as f64) * 100.0 / dns_total).round() as i64;
-            findings.push(Finding{ kind: "anomaly".into(), key: "ai_ratio_percent".into(), value: pct.to_string(), severity: if pct >= 10 { "warn".into() } else { "info".into() } });
+            findings.push(Finding {
+                kind: KIND_ANOMALY.into(),
+                key: FK_AI_RATIO_PERCENT.into(),
+                value: pct.to_string(),
+            });
         }
     }
 
+    // loopback dominance
     let all_net = src_ips.values().sum::<usize>();
     let localhost = src_ips.get("127.0.0.1").copied().unwrap_or(0);
-    if all_net > 0 && localhost as f64 / all_net as f64 > 0.8 {
-        findings.push(Finding{ kind: "anomaly".into(), key: "loopback_dominated".into(), value: format!("{localhost}/{all_net}"), severity: "warn".into() });
+    if all_net > 0 && (localhost as f64) / (all_net as f64) > 0.8 {
+        findings.push(Finding {
+            kind: KIND_ANOMALY.into(),
+            key: FK_LOOPBACK_DOMINATED.into(),
+            value: format!("{localhost}/{all_net}"),
+        });
     }
 
-    // intensity last
-    findings.push(Finding{ kind: "net".into(), key: "burst_max_events_per_min".into(), value: burst_max_per_min.to_string(), severity: "info".into() });
-    findings.push(Finding{ kind: "net".into(), key: "final5_net_events".into(), value: final5_net_events.to_string(), severity: if final5_net_events > 50 { "warn".into() } else { "info".into() } });
+    // intensity
+    findings.push(Finding {
+        kind: KIND_NET.into(),
+        key: FK_BURST_MAX_EVENTS_PER_MIN.into(),
+        value: burst_max_per_min.to_string(),
+    });
+    findings.push(Finding {
+        kind: KIND_NET.into(),
+        key: FK_FINAL5_NET_EVENTS.into(),
+        value: final5_net_events.to_string(),
+    });
 
-    Ok(AnalysisResult{ findings, now_rfc3339: now_rfc3339 })
+    info!(
+        "analyze_zip: done {} | events={} domains={} ai_hits={} procs_started={} procs_stopped={}",
+        zip_path.display(), total_net_events, domains.len(), ai_hits_total, proc_starts, proc_stops
+    );
+
+    Ok(AnalysisResult {
+        findings,
+        now_rfc3339,
+    })
 }
 
-
 pub fn process_pending(data: &web::Data<AppState>) -> Result<(), String> {
-
-    // pick one oldest submission with status received
-    let conn = data
-        .pool
-        .get()
-        .map_err(|e| e.to_string())?;
-    
-    let tx = conn
-        .unchecked_transaction()
-        .map_err(|e| e.to_string())?;
+    let conn = data.pool.get().map_err(|e| e.to_string())?;
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
 
     let sub: Option<(String, String)> = tx
         .query_row(
@@ -411,30 +627,26 @@ pub fn process_pending(data: &web::Data<AppState>) -> Result<(), String> {
         return Ok(());
     };
 
-    // mark as processing
     tx.execute("UPDATE submissions SET status = 'processing' WHERE id = ?1", [&sub_id])
         .map_err(|e| e.to_string())?;
     tx.commit().map_err(|e| e.to_string())?;
 
-    // analyze outside the TX
     let analysis = analyze_zip(PathBuf::from(&fs_path))
         .map_err(|e| format!("analyze {fs_path}: {e}"))?;
 
-    // write findings and finalize
     let conn = data.pool.get().map_err(|e| e.to_string())?;
     let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
 
     for f in analysis.findings {
         tx.execute(
-            "INSERT INTO findings(id, submission_ref, kind, key, value, severity, created_at)
-             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO findings(id, submission_ref, kind, key, value, created_at)
+             VALUES(?1, ?2, ?3, ?4, ?5, ?6)",
             rusqlite::params![
                 Uuid::new_v4().to_string(),
                 &sub_id,
                 f.kind,
                 f.key,
                 f.value,
-                f.severity,
                 analysis.now_rfc3339
             ],
         )
@@ -445,12 +657,10 @@ pub fn process_pending(data: &web::Data<AppState>) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     tx.commit().map_err(|e| e.to_string())?;
 
-    // move file last, after DB is durable
     let src = PathBuf::from(&fs_path);
-    let dst = data.processed_dir.join(
-        src.file_name().unwrap_or_default()
-    );
-    fs::rename(&src, &dst).map_err(|e| format!("move {} -> {}: {e}", src.display(), dst.display()))?;
+    let dst = data.processed_dir.join(src.file_name().unwrap_or_default());
+    fs::rename(&src, &dst)
+        .map_err(|e| format!("move {} -> {}: {e}", src.display(), dst.display()))?;
 
     Ok(())
 }

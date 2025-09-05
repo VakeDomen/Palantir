@@ -38,7 +38,11 @@ pub async fn upload_logs(
         &now,
         meta.moodle_assignment_id.as_deref().unwrap_or(""),
         meta.client_version.as_deref().unwrap_or("client"),
-    ).map_err(actix_web::error::ErrorInternalServerError)?;
+    ).map_err(|e| {
+        log::error!("new_submission failed: {}", e);
+        actix_web::error::ErrorInternalServerError(e)
+    })?;
+
 
     // 2 stream-upload file to disk, compute sha256 and size
     let mut saved_path = None;
