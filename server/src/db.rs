@@ -280,7 +280,7 @@ pub fn add_log_artifact(
 
 
 // in src/db.rs
-#[derive(serde::Serialize, Clone)]
+#[derive(serde::Serialize, Clone, Debug)]
 pub struct FindingRow {
     pub submission_ref: String,
     pub kind: String,
@@ -339,8 +339,44 @@ pub fn fetch_durations_minutes(conn: &rusqlite::Connection, aid: &str) -> Vec<i6
        WHERE s.submission_id = ?1 AND f.key = 'duration_minutes'"
     ).unwrap();
     let rows = q.query_map(params![aid], |r| r.get::<_, String>(0)).unwrap();
+    
     for r in rows {
-        if let Ok(s) = r { if let Ok(n) = s.parse::<i64>() { out.push(n); } }
+        if let Ok(s) = r { 
+            if let Ok(n) = s.parse::<i64>() { 
+                out.push(n); 
+            } 
+        }
     }
     out
+}
+
+pub fn list_findings_for_submission(
+    pool: &r2d2::Pool<r2d2_sqlite::SqliteConnectionManager>,
+    sub_id: &str,
+) -> Result<Vec<FindingRow>, String> {
+    let conn = pool.get().map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare(
+        r#"
+        SELECT id, submission_ref, kind, key, value, created_at
+        FROM findings
+        WHERE submission_ref = ?1
+        ORDER BY created_at ASC, kind ASC, key ASC
+        "#
+    ).map_err(|e| e.to_string())?;
+
+    let rows = stmt.query_map([sub_id], |r| {
+        Ok(FindingRow {
+            // correct columns:
+            submission_ref: r.get::<_, String>(1)?, // submission_ref
+            kind:           r.get::<_, String>(2)?, // kind
+            key:            r.get::<_, String>(3)?, // key
+            value:          r.get::<_, String>(4)?, // value
+        })
+    }).map_err(|e| e.to_string())?;
+
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row.map_err(|e| e.to_string())?);
+    }
+    Ok(out)
 }

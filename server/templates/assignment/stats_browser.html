@@ -1,5 +1,7 @@
-<div class="box column is-6">
-  <p class="is-size-6 has-text-weight-semibold">Browser usage</p>
-  <progress class="progress is-small" value="{{ has }}" max="{{ total }}"></progress>
-  <p>{{ has }} of {{ total }} submissions had a browser open</p>
+<div class="column is-6">
+  <div class="">
+    <p class="is-size-6 has-text-weight-semibold mb-2">Browser usage</p>
+    <progress class="progress is-small is-warning" value="{{ has }}" max="{{ total }}"></progress>
+    <p>{{ has }} of {{ total }} submissions had a browser open</p>
+  </div>
 </div>

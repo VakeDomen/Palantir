@@ -6,3 +6,4 @@ pub mod get_stats_browser;
 pub mod get_stats_domains;
 pub mod get_stats_shared_lan;
 pub mod get_stats_outliers;
+pub mod get_cards;

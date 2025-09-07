@@ -1,142 +1,89 @@
 <div id="procChartWrap-{{ id }}" style="height:300px">
-    <canvas id="procChart-{{ id }}"></canvas>
+  <canvas id="procChart-{{ id }}"></canvas>
 </div>
 
-
 <script>
-    (function () {
-        const cid = "procChart-{{ id }}";
-        const wrapId = "procChartWrap-{{ id }}";
-        const key = "__chartInst_" + cid;
+(function () {
+  const cid = "procChart-{{ id }}";
+  const wrapId = "procChartWrap-{{ id }}";
+  const key = "__chartInst_" + cid;
 
-        // destroy previous instance if fragment reloaded
-        if (window[key]) { try { window[key].destroy(); } catch (_) { } window[key] = null; }
+  if (window[key]) { try { window[key].destroy(); } catch (_) {} window[key] = null; }
 
-        const wrapEl = document.getElementById(wrapId);
-        const canvas = document.getElementById(cid);
-        if (!wrapEl || !canvas) return; // safety
+  const wrapEl = document.getElementById(wrapId);
+  const canvas = document.getElementById(cid);
+  if (!wrapEl || !canvas) return;
 
-        const CHEAT_HIGHLIGHT = [
-        // browsers and webviews
-            "firefox","chrome","chromium","brave","edge","opera","web",
-            // AI and chat
-            "chatgpt","claude","ollama","telegram-desktop","discord","slack",
-            // shells and scripting
-            "bash","zsh","fish","sh","python","python3","node","deno","ruby","perl","pwsh","powershell",
-            // remote access and transfer
-            "ssh","ssh-agent","scp","sftp","rsync","teamviewer","anydesk","rustdesk","remmina","xrdp","vnc",
-            // http and api clients
-            "curl","wget","httpie","insomnia","postman",
-            // package managers and build tools
-            "pip","pip3","poetry","conda","npm","pnpm","yarn","cargo","rustc","go","javac","java",
-            "mvn","gradle","make","cmake","gcc","g++","clang","ld","collect2",
-            // containers and cloud
-            "docker","podman","kubectl","minikube",
-            // VMs and emulators
-            "qemu","virt-manager","virtualbox","vmware","vagrant"
-        ];
+  // Pulled from Rust consts via Tera context
+  const CHEAT_HIGHLIGHT = {{ CHEAT_HIGHLIGHT_JSON | safe }};
+  const SYSTEM_HIDE     = {{ SYSTEM_HIDE_JSON | safe }};
 
-        const SYSTEM_HIDE = [
-            "(sd-pam)","systemd","sd_dummy","dbus","polkit","gvfs","xdg","xdg-desktop-portal",
-            "mutter","gnome-shell","gjs","xwayland","nautilus","dconf-service","goa-daemon","goa-identity-service",
-            "gcr-ssh-agent","pipewire","wireplumber",
-            "sd_espeak-ng","sd_espeak-ng-mb","speech-dispatcher",
-            "localsearch","localsearch-3","tracker","tracker-miner",
-            "chrome_crashpad","crashhelper","privileged",
-            "webextensions","mpris-proxy",
-            // snap/flatpak infra
-            "snap","snapd","flatpak",
-            // login/session
-            "gdm-wayland-session","gdm-session-worker",
-        ];
+  fetch("/admin/submissions/{{ id }}/proc_timeline.json")
+    .then(r => r.json())
+    .then(data => {
+      const prioSet = new Set(CHEAT_HIGHLIGHT.map(s => s.toLowerCase()));
+      const hideSet = new Set(SYSTEM_HIDE.map(s => s.toLowerCase()));
 
+      function matchesSet(label, set) {
+        const l = String(label).toLowerCase();
+        if (set.has(l)) return true;
+        for (const key of set) {
+          if (key.startsWith(l)) return true;
+        }
+        return false;
+      }
 
-        fetch("/admin/submissions/{{ id }}/proc_timeline.json")
-            .then(r => r.json())
-            .then(data => {
-                const prioSet = new Set(CHEAT_HIGHLIGHT.map(s => s.toLowerCase()));
-                const hideSet = new Set(SYSTEM_HIDE.map(s => s.toLowerCase()));
+      console.log(data.rows.map(e => e.label).join(", "));
 
-                function matchesSet(label, set) {
-                const l = String(label).toLowerCase();
-                if (set.has(l)) return true;
-                    for (const key of set) { 
-                        if (l.startsWith(key)) return true; 
-                    }
-                    return false;
-                }
+      let rows = data.rows.filter(r => !matchesSet(r.label, hideSet));
 
-                let rows = data.rows.filter(r => !matchesSet(r.label, hideSet));
-                wrapEl.style.height = Math.max(220, 20 * rows.length + 40) + "px";
+      // priority first
+      rows.sort((a, b) => {
+        const pa = matchesSet(a.label, prioSet) ? 0 : 1;
+        const pb = matchesSet(b.label, prioSet) ? 0 : 1;
+        return pa - pb;
+      });
 
-                // put priority rows first
-                rows.sort((a,b) => {
-                const pa = matchesSet(a.label, prioSet) ? 0 : 1;
-                const pb = matchesSet(b.label, prioSet) ? 0 : 1;
-                return pa - pb;
-                });
+      // dynamic height
+      const count = rows.length;
+      wrapEl.style.height = Math.max(220, 30 * count + 40) + "px";
 
-                // height based on final list
-                const count = rows.length;
-                wrapEl.style.height = Math.max(220, 30 * count + 40) + "px";
+      const yLabels = rows.map(r => r.label);
+      const yTickColor = (ctx) => matchesSet(ctx.tick.label, prioSet) ? "red" : "gray";
 
-                // datasets
-                const datasets = rows.map(row => ({
-                label: row.label,
-                data: row.segments.map(seg => ({ y: row.label, x: [seg.start, seg.end] }))
-                }));
-
-                // y-axis label coloring (red for priority)
-                const yLabels = rows.map(r => r.label);
-                const yTickColor = ctx => matchesSet(ctx.tick.label, prioSet) ? "red" : "gray";
-
-
-
-                const ctx = canvas.getContext("2d");
-                window[key] = new Chart(ctx, {
-                    type: "bar",
-                    data: {
-                        datasets: rows.map(row => ({
-                            label: row.label,
-                            data: row.segments.map(seg => ({
-                                y: row.label,
-                                x: [seg.start, seg.end]
-                            }))
-                        }))
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        indexAxis: "y",
-                        scales: {
-                            x: {
-                                type: "time",
-                                time: { unit: "minute" },
-                                min: data.tmin,
-                                max: data.tmax
-                            },
-                            y: {
-                                type: "category",
-                                labels: yLabels,
-                                ticks: { autoSkip: false, color: yTickColor },
-                                offset: true
-                            }
-                        },
-                        barPercentage: 5.4,
-                        plugins: {
-                            legend: { display: false },
-                        },
-                        elements: {
-                            bar: {
-                                borderSkipped: false,
-                                barThickness: "3px"
-                            }
-                        }
-                    }
-                });
-
-
-            })
-            .catch(err => console.error("proc timeline fetch error", err));
-    })();
+      const ctx = canvas.getContext("2d");
+      window[key] = new Chart(ctx, {
+        type: "bar",
+        data: {
+          datasets: rows.map(row => ({
+            label: row.label,
+            data: row.segments.map(seg => ({ y: row.label, x: [seg.start, seg.end] }))
+          }))
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          indexAxis: "y",
+          scales: {
+            x: {
+              type: "time",
+              time: { unit: "minute" },
+              min: data.tmin,
+              max: data.tmax
+            },
+            y: {
+              type: "category",
+              labels: yLabels,
+              ticks: { autoSkip: false, color: yTickColor },
+              offset: true
+            }
+          },
+          barPercentage: 5.4,
+          plugins: { legend: { display: false } },
+          elements: { bar: { borderSkipped: false, barThickness: "3px" } }
+        }
+      });
+    })
+    .catch(err => console.error("proc timeline fetch error", err));
+})();
 </script>

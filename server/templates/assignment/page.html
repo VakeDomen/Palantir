@@ -19,7 +19,7 @@
       </nav>
 
 
-      <div class="columns is-multiline">
+      <div class="columns is-multiline box">
         <!-- <div class="column is-6" hx-get="/admin/assignment/{{ assignment_id }}/stats_activity" hx-trigger="load"
           hx-swap="innerHTML">
           <div class="box">Loading activity…</div>
@@ -52,18 +52,139 @@
       </div>
 
 
-      <div id="content" class="mt-4">
-        <div class="columns is-multiline">
-          {% for c in cards %}
-          {% include "assignment/submission_card.html" %}
-          {% else %}
-          <p class="has-text-grey">No submissions yet.</p>
-          {% endfor %}
-        </div>
+      <div class="box mb-4">
+        <form id="assign-controls" hx-get="/admin/assignment/{{ assignment_id }}/cards" hx-target="#content"
+          hx-swap="innerHTML" hx-boost="false">
 
+          <div class="columns is-vcentered is-multiline">
+            <!-- Left: student search -->
+            <div class="column is-6">
+              <div class="field">
+                <label class="label is-size-7 mb-1">Search student</label>
+                <div class="control">
+                  <input class="input" type="text" name="q" placeholder="e.g. alice"
+                    hx-trigger="keyup changed delay:300ms" hx-get="/admin/assignment/{{ assignment_id }}/cards"
+                    hx-target="#content" hx-swap="innerHTML" hx-include="#assign-controls">
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: add rule -->
+            <div class="column is-6">
+              <label class="label is-size-7 mb-1">Add rule</label>
+              <div class="field has-addons">
+                <p class="control">
+                  <span class="select">
+                    <select id="rule-key">
+                      <option value="requests_per_min">requests_per_min</option>
+                      <option value="total_net_events">total_net_events</option>
+                      <option value="duration_minutes">duration_minutes</option>
+                      <option value="had_browser">had_browser</option>
+                      <option value="ai_hits_total">ai_hits_total</option>
+                    </select>
+                  </span>
+                </p>
+                <p class="control">
+                  <span class="select">
+                    <select id="rule-op">
+                      <option value="gt">&gt;</option>
+                      <option value="ge">&ge;</option>
+                      <option value="eq">=</option>
+                      <option value="le">&le;</option>
+                      <option value="lt">&lt;</option>
+                      <option value="ne">≠</option>
+                      <option value="exists">exists</option>
+                    </select>
+                  </span>
+                </p>
+                <p class="control is-expanded">
+                  <input class="input" id="rule-val" placeholder="value (true/false or number)">
+                </p>
+                <p class="control">
+                  <button class="button" type="button" id="add-rule">Add</button>
+                </p>
+              </div>
+
+              <!-- Where active rules live (as hidden inputs + tags) -->
+            </div>
+            <div id="active-rules" class="column is-12 tags mt-2"></div>
+          </div>
+        </form>
+      </div>
+
+
+
+
+
+      <div id="content" class="mt-4">
+        {% include "assignment/card_list.html" %}
       </div>
     </div>
   </section>
 </body>
 
 </html>
+
+
+<script>
+  (function () {
+    const rulesEl = document.getElementById('active-rules');
+    const form = document.getElementById('assign-controls');
+    const keyEl = document.getElementById('rule-key');
+    const opEl = document.getElementById('rule-op');
+    const valEl = document.getElementById('rule-val');
+
+    function addRuleChip(key, op, val) {
+      const id = crypto.randomUUID();
+
+      // visible chip
+      const chip = document.createElement('span');
+      chip.className = 'tag';
+      chip.dataset.ruleId = id;
+      chip.textContent = op === 'exists' ? `${key} exists ` : `${key} ${op} ${val} `;
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'delete is-small';
+      del.onclick = () => {
+        form.querySelectorAll(`input[data-rule-id="${id}"]`).forEach(n => n.remove());
+        chip.remove();
+        htmx.trigger(form, 'submit');
+      };
+      chip.appendChild(del);
+      rulesEl.appendChild(chip);
+
+      // hidden input with the whole JSON
+      const inp = document.createElement('input');
+      inp.type = 'hidden';
+      inp.name = 'filters[]';
+      inp.value = JSON.stringify({ key, op, val });
+      inp.dataset.ruleId = id;
+      form.appendChild(inp);
+
+      htmx.trigger(form, 'submit');
+    }
+
+
+    // Adapt value input type for booleans
+    keyEl.addEventListener('change', () => {
+      const k = keyEl.value;
+      if (k === 'had_browser') { valEl.placeholder = 'true or false'; }
+      else { valEl.placeholder = 'value (number)'; }
+    });
+
+    document.getElementById('add-rule').addEventListener('click', () => {
+      const key = keyEl.value;
+      const op = opEl.value;
+      let val = valEl.value.trim();
+      if (op !== 'exists' && val === '') return;
+      if (key === 'had_browser' && op !== 'exists') {
+        const t = val.toLowerCase();
+        if (t !== 'true' && t !== 'false') { alert('Use true/false for had_browser'); return; }
+      }
+      addRuleChip(key, op, val);
+      valEl.value = '';
+      // 👉 trigger form submit so HTMX serializes inputs into query params
+      htmx.trigger(form, 'submit');
+    });
+  })();
+</script>

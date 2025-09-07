@@ -72,7 +72,11 @@ pub struct Visit {
 pub fn build_cards(rows: &[SubmissionRow], findings: &[FindingRow]) -> Vec<SubmissionCard> {
     use std::collections::{HashMap, HashSet};
     let mut by_sub: HashMap<&str, Vec<&FindingRow>> = HashMap::new();
-    for f in findings { by_sub.entry(&f.submission_ref).or_default().push(f); }
+    for f in findings { 
+        by_sub.entry(&f.submission_ref)
+            .or_default()
+            .push(f); 
+    }
 
 
     rows.iter().map(|r| {

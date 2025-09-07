@@ -1,6 +1,7 @@
 use actix_web::{get, web, HttpResponse, Responder};
 
 use crate::AppState;
+use crate::routes::admin::util::consts::OUTLIER_MIN_FLAG_PERCENTILE;
 
 #[derive(serde::Serialize)]
 struct NetOut {
@@ -73,9 +74,9 @@ pub async fn stats_outliers(data: web::Data<AppState>, path: web::Path<String>) 
     let mad = median_i64(abs_dev);
 
     // thresholds
-    let p95 = percentile_i64(totals.clone(), 95.0);
+    let p_min = percentile_i64(totals.clone(), OUTLIER_MIN_FLAG_PERCENTILE as f64);
     let robust_cut = med + 3 * mad.max(1);
-    let cut = robust_cut.max(p95);
+    let cut = robust_cut.max(p_min);
 
     // precompute percentiles to display
     // quick-and-dirty percentile estimate from the sorted list
@@ -119,7 +120,8 @@ pub async fn stats_outliers(data: web::Data<AppState>, path: web::Path<String>) 
     let mut ctx = tera::Context::new();
     ctx.insert("rows", &flagged);
     ctx.insert("median", &med);
-    ctx.insert("p95", &p95);
+    ctx.insert("pctl_min", &OUTLIER_MIN_FLAG_PERCENTILE);
+
     let html = match data.tera.render("assignment/stats_outliers.html", &ctx) {
         Ok(h) => h,
         Err(e) => return HttpResponse::InternalServerError().body(format!("render error: {e}")),

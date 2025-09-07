@@ -1,0 +1,92 @@
+<div class="columns is-multiline is-variable is-6">
+    <!-- Artifacts table -->
+    <div class="column is-12">
+        <div style="border-radius: 1rem;">
+            <div class="table-container">
+                <table class="table is-fullwidth is-striped is-hoverable">
+                    <thead>
+                        <tr>
+                            <th>File</th>
+                            <th class="nowrap">Size</th>
+                            <th>SHA-256</th>
+                            <th class="has-text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for e in logs %}
+                        {% set name = e.fs_path | split(pat="/") | last %}
+                        <tr>
+                            <td class="is-mono">
+                                <a href="/uploads/{{ name }}" title="Download artifact">Raw</a>
+                            </td>
+                            <td class="nowrap" title="{{ e.size_bytes }} bytes">{{ e.size_bytes }} B</td>
+                            <td><span class="is-mono" id="sha-{{ loop.index }}">{{ e.sha256 }}</span></td>
+                            <td class="has-text-right">
+                                <button class="button is-small" type="button" title="Copy SHA-256"
+                                    onclick="copyText('sha-{{ loop.index }}')">
+                                    Copy hash
+                                </button>
+                                <a class="button is-small is-link" href="/uploads/{{ name }}"
+                                    title="Download file">Download</a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="4" class="has-text-grey">No artifacts</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Findings grouped -->
+    <div class="column is-12">
+        {% macro kv_table(title, items) %}
+        <div style="border-radius: 1rem;">
+            <p class="is-size-6 has-text-weight-semibold mb-3">{{ title }}</p>
+            {% if items | length == 0 %}
+            <p class="has-text-grey is-size-7">No data</p>
+            {% else %}
+            <div class="table-container">
+                <table class="table is-fullwidth is-narrow is-striped is-hoverable">
+                    <thead>
+                        <tr>
+                            <th class="is-size-7">key</th>
+                            <th class="is-size-7">value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for f in items %}
+                        <tr>
+                            <td class="is-size-7 is-family-monospace">{{ f.key }}</td>
+                            <td class="is-size-7">{{ f.value }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+        </div>
+        {% endmacro %}
+
+        {# Prefer dot access; default to [] if missing #}
+        {% set meta_list = (by_kind.meta | default(value=[])) %}
+        {% set proc_list = (by_kind.proc | default(value=[])) %}
+        {% set net_list = (by_kind.net | default(value=[])) %}
+
+        <div class="columns is-variable is-5">
+            <div class="column is-4">
+                {{ self::kv_table(title="Meta", items=meta_list) }}
+            </div>
+            <div class="column is-4">
+                {{ self::kv_table(title="Processes", items=proc_list) }}
+            </div>
+            <div class="column is-4">
+                {{ self::kv_table(title="Network", items=net_list) }}
+            </div>
+        </div>
+    </div>
+
+</div>

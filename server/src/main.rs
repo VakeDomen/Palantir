@@ -93,6 +93,7 @@ async fn main() -> std::io::Result<()> {
             .service(admin::submission::get_timeline_network::net_timeline_fragment)
             .service(admin::submission::get_timeline_process::proc_timeline_json)
             .service(admin::submission::get_timeline_process::proc_timeline_fragment)
+            .service(admin::submission::get_artifacts::submission_artifacts_frag)
             .service(admin::assignment::get_stats_activity::stats_activity)
             .service(admin::assignment::get_stats_status::stats_status)
             .service(admin::assignment::get_stats_duration::stats_duration)
@@ -100,6 +101,7 @@ async fn main() -> std::io::Result<()> {
             .service(admin::assignment::get_stats_domains::stats_domains)
             .service(admin::assignment::get_stats_outliers::stats_outliers)
             .service(admin::assignment::get_stats_shared_lan::stats_shared_lan)
+            .service(admin::assignment::get_cards::assignment_cards)
             .service(admin::dashboard::admin_root)            
         })
     .bind((host, port))?
