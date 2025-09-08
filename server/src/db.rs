@@ -167,29 +167,6 @@ pub fn list_submissions_by_assignment(pool: &Pool<SqliteConnectionManager>, assi
     Ok(out)
 }
 
-pub fn list_recent_submissions(pool: &Pool<SqliteConnectionManager>, limit: i64) -> Result<Vec<SubmissionRow>, String> {
-    let conn = pool.get().map_err(|e| e.to_string())?;
-    let mut stmt = conn.prepare(
-        "SELECT id, student_name, created_at, status
-         FROM submissions
-         ORDER BY created_at DESC
-         LIMIT ?1"
-    ).map_err(|e| e.to_string())?;
-
-    let rows = stmt.query_map([limit], |r| {
-        Ok(SubmissionRow {
-            id: r.get(0)?,
-            student_name: r.get(1)?,
-            created_at: r.get(2)?,
-            status: r.get(3)?,
-        })
-    }).map_err(|e| e.to_string())?;
-
-    let mut out = Vec::new();
-    for row in rows { out.push(row.map_err(|e| e.to_string())?); }
-    Ok(out)
-}
-
 pub fn get_submission_detail(pool: &Pool<SqliteConnectionManager>, id: &str) -> Result<Option<SubmissionDetail>, String> {
     let conn = pool.get().map_err(|e| e.to_string())?;
     let mut stmt = conn.prepare(

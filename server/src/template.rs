@@ -11,8 +11,6 @@ impl From<tera::Error> for RenderError {
     fn from(e: tera::Error) -> Self { RenderError(e.to_string()) }
 }
 
-
-/* Full page: one submission detail with artifacts */
 pub fn submission_detail_page(
     tera: &Tera,
     id: &str,

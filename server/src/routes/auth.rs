@@ -1,6 +1,5 @@
-use actix_web::{dev::{forward_ready, Payload, Service, ServiceRequest, ServiceResponse}, error::ErrorUnauthorized, get, guard::GuardContext, http::header, middleware::Next, post, web::{self, Redirect}, Error, FromRequest, HttpRequest, HttpResponse, Responder};
+use actix_web::{dev::Payload, get, post, web, Error, FromRequest, HttpRequest, HttpResponse, Responder};
 use actix_session::Session;
-use futures_util::future::LocalBoxFuture;
 use ldap3::{LdapConn, Scope, SearchEntry};
 use serde::Deserialize;
 

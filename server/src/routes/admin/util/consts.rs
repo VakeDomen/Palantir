@@ -169,10 +169,6 @@ pub const PRIVATE_IPV4_PREFIXES: &[&str] = &[
 ];
 
 /// Severity strings
-pub const SEV_INFO: &str = "info";
-pub const SEV_WARN: &str = "warn";
-pub const SEV_CRIT: &str = "critical";
-
 pub const KIND_META: &str    = "meta";
 pub const KIND_PROC: &str    = "proc";
 pub const KIND_NET: &str     = "net";

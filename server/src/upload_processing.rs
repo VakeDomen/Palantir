@@ -26,17 +26,6 @@ struct AnalysisResult {
     now_rfc3339: String,
 }
 
-pub fn pretty_rfc3339(s: &str) -> String {
-    let Ok(dt) = OffsetDateTime::parse(s, &Rfc3339) else {
-        return s.to_string();
-    };
-    let offset = time::UtcOffset::current_local_offset().unwrap_or(time::UtcOffset::UTC);
-    let local = dt.to_offset(offset);
-    let fmt =
-        time::format_description::parse("[month repr:short] [day], [year] [hour]:[minute]").unwrap();
-    local.format(&fmt).unwrap_or_else(|_| s.to_string())
-}
-
 pub fn parse_rfc3339(s: &str) -> Option<OffsetDateTime> {
     OffsetDateTime::parse(s, &Rfc3339).ok()
 }

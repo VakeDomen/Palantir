@@ -2,7 +2,7 @@ use actix_session::Session;
 use actix_web::{get, web, HttpResponse, Responder};
 use tera::Context;
 
-use crate::{db, routes::auth::Authorized, template, AppState};
+use crate::{db, routes::auth::Authorized, AppState};
 
 
 
