@@ -125,22 +125,7 @@
         </form>
       </div>
 
-      <!-- 
-      <div class="buttons">
-        <button class="button is-small" hx-get="/admin/assignment/{{ assignment_id }}/cards"
-          hx-include="#assign-controls" hx-target="#content" hx-swap="innerHTML">Cards</button>
-
-        <button class="button is-small" hx-get="/admin/assignment/{{ assignment_id }}/table"
-          hx-include="#assign-controls" hx-target="#content" hx-swap="innerHTML">Table</button>
-      </div> -->
-
-
-
-
-      <!-- <div id="content" class="mt-4">
-        {% include "assignment/table.html" %}
-      </div> -->
-
+      <!-- Submissions table -->
       <div class="box" id="submissions-table">
         <div class="table-container">
           <table class="table is-fullwidth is-hoverable is-striped">
@@ -185,7 +170,7 @@
 
       // visible chip
       const chip = document.createElement('span');
-      chip.className = 'tag';
+      chip.className = 'tag ml-2';
       chip.dataset.ruleId = id;
       chip.textContent = op === 'exists' ? `${key} exists ` : `${key} ${op} ${val} `;
       const del = document.createElement('button');
