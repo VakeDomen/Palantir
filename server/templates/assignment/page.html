@@ -72,7 +72,7 @@
                     type="text" 
                     name="q" 
                     placeholder="e.g. alice"
-                    hx-trigger="keyup changed delay:300ms" 
+                    hx-trigger="keyup changed" 
                     hx-get="/admin/assignment/{{ assignment_id }}/table_rows"
                     hx-target="#submissions-table-body" 
                     hx-swap="innerHTML" 
