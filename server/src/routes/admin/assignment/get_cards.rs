@@ -1,4 +1,5 @@
 use actix_web::{get, web, HttpRequest, HttpResponse, Responder};
+use rusqlite::types::Value;
 use url::form_urlencoded;
 use serde::Deserialize;
 
@@ -161,6 +162,108 @@ pub async fn assignment_cards(
     ctx.insert("cards", &cards);
     match data.tera.render("assignment/card_list.html", &ctx) {
         Ok(html) => HttpResponse::Ok().body(html),
+        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+    }
+}
+
+
+
+fn pretty_filter_tag(f: &FilterItem) -> String {
+    let op = match f.op.as_str() {
+        "gt" => ">", "ge" => "≥", "eq" => "=", "le" => "≤", "lt" => "<", "ne" => "≠",
+        "exists" => "exists",
+        x => x,
+    };
+    if f.op == "exists" {
+        format!("{} {}", f.key, op)
+    } else {
+        format!("{} {} {}", f.key, op, f.val.as_deref().unwrap_or(""))
+    }
+}
+
+#[get("/admin/assignment/{aid}/table_rows")]
+pub async fn assignment_table_rows(
+    data: web::Data<AppState>,
+    path: web::Path<String>,
+    req: HttpRequest,
+) -> impl Responder {
+    let aid = path.into_inner();
+    let cq = parse_card_query(&req);
+
+    let mut sql = String::from(
+        "SELECT s.id, s.student_name, s.created_at, s.status
+           FROM submissions s
+          WHERE s.submission_id = ?"
+    );
+    let mut args: Vec<Value> = vec![aid.clone().into()];
+
+    if let Some(q) = cq.q.as_ref().filter(|s| !s.trim().is_empty()) {
+        sql.push_str(" AND s.student_name LIKE ?");
+        args.push(format!("%{}%", q).into());
+    }
+
+    build_where_for_filters(&mut sql, &mut args, &cq.filters);
+    sql.push_str(" ORDER BY s.created_at DESC LIMIT 300");
+
+    // DB
+    let conn = match data.pool.get() {
+        Ok(c) => c, Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),
+    };
+    let mut stmt = match conn.prepare(&sql) {
+        Ok(s) => s, Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),
+    };
+
+    let rows = stmt.query_map(rusqlite::params_from_iter(args), |r| {
+        Ok(crate::db::SubmissionRow {
+            id: r.get(0)?, student_name: r.get(1)?, created_at: r.get(2)?, status: r.get(3)?,
+        })
+    });
+
+    let mut subs = Vec::new();
+    if let Ok(it) = rows {
+        for row in it {
+            if let Ok(s) = row { subs.push(s); }
+        }
+    }
+
+    // findings + cards (reusing your builder)
+    let ids: Vec<String> = subs.iter().map(|s| s.id.clone()).collect();
+    let findings = match list_findings_for_submissions(&data.pool, &ids) {
+        Ok(v) => v, Err(e) => return HttpResponse::InternalServerError().body(e),
+    };
+    let cards = template::build_cards(&subs, &findings);
+
+    // pretty tags for the *active filters* (shared)
+    let filter_tags: Vec<String> = cq.filters.iter().map(pretty_filter_tag).collect();
+
+    // render rows only
+    let mut ctx = tera::Context::new();
+    ctx.insert("cards", &cards);
+    ctx.insert("filter_tags", &filter_tags);
+    let html = match data.tera.render("assignment/table_rows.html", &ctx) {
+        Ok(h) => h,
+        Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),
+    };
+    HttpResponse::Ok().body(html)
+}
+
+
+#[get("/admin/assignment/{aid}/table")]
+pub async fn assignment_table_page(
+    data: web::Data<AppState>,
+    path: web::Path<String>,
+    req: HttpRequest,
+) -> impl Responder {
+    let aid = path.into_inner();
+    // You can also parse filters here and pass `active_filters` to show at top
+    let cq = parse_card_query(&req);
+    let pretty: Vec<String> = cq.filters.iter().map(pretty_filter_tag).collect();
+
+    let mut ctx = tera::Context::new();
+    ctx.insert("assignment_id", &aid);
+    ctx.insert("active_filters", &pretty);
+    match data.tera.render("assignment/table.html", &ctx) {
+        Ok(h) => HttpResponse::Ok().body(h),
         Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
     }
 }

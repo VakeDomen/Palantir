@@ -102,6 +102,8 @@ async fn main() -> std::io::Result<()> {
             .service(admin::assignment::get_stats_outliers::stats_outliers)
             .service(admin::assignment::get_stats_shared_lan::stats_shared_lan)
             .service(admin::assignment::get_cards::assignment_cards)
+            .service(admin::assignment::get_cards::assignment_table_page)
+            .service(admin::assignment::get_cards::assignment_table_rows)
             .service(admin::dashboard::admin_root)            
         })
     .bind((host, port))?

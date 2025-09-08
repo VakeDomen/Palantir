@@ -53,8 +53,13 @@
 
 
       <div class="box mb-4">
-        <form id="assign-controls" hx-get="/admin/assignment/{{ assignment_id }}/cards" hx-target="#content"
-          hx-swap="innerHTML" hx-boost="false">
+        <form 
+          id="assign-controls" 
+          hx-get="/admin/assignment/{{ assignment_id }}/table_rows" 
+          hx-target="#submissions-table-body"
+          hx-swap="innerHTML" 
+          hx-boost="false"
+        >
 
           <div class="columns is-vcentered is-multiline">
             <!-- Left: student search -->
@@ -62,9 +67,17 @@
               <div class="field">
                 <label class="label is-size-7 mb-1">Search student</label>
                 <div class="control">
-                  <input class="input" type="text" name="q" placeholder="e.g. alice"
-                    hx-trigger="keyup changed delay:300ms" hx-get="/admin/assignment/{{ assignment_id }}/cards"
-                    hx-target="#content" hx-swap="innerHTML" hx-include="#assign-controls">
+                  <input 
+                    class="input" 
+                    type="text" 
+                    name="q" 
+                    placeholder="e.g. alice"
+                    hx-trigger="keyup changed delay:300ms" 
+                    hx-get="/admin/assignment/{{ assignment_id }}/table_rows"
+                    hx-target="#submissions-table-body" 
+                    hx-swap="innerHTML" 
+                    hx-include="#assign-controls"
+                  >
                 </div>
               </div>
             </div>
@@ -112,13 +125,46 @@
         </form>
       </div>
 
+      <!-- 
+      <div class="buttons">
+        <button class="button is-small" hx-get="/admin/assignment/{{ assignment_id }}/cards"
+          hx-include="#assign-controls" hx-target="#content" hx-swap="innerHTML">Cards</button>
+
+        <button class="button is-small" hx-get="/admin/assignment/{{ assignment_id }}/table"
+          hx-include="#assign-controls" hx-target="#content" hx-swap="innerHTML">Table</button>
+      </div> -->
 
 
 
 
-      <div id="content" class="mt-4">
-        {% include "assignment/card_list.html" %}
+      <!-- <div id="content" class="mt-4">
+        {% include "assignment/table.html" %}
+      </div> -->
+
+      <div class="box" id="submissions-table">
+        <div class="table-container">
+          <table class="table is-fullwidth is-hoverable is-striped">
+            <thead>
+              <tr>
+                <th class="nowrap">Student</th>
+                <th class="nowrap">Submitted</th>
+                <th class="has-text-right nowrap">Duration (min)</th>
+                <th class="has-text-right nowrap">Requests</th>
+                <th class="nowrap">Tags</th>
+                <th class="has-text-right"></th>
+              </tr>
+            </thead>
+              <tbody id="submissions-table-body"
+                     hx-get="/admin/assignment/{{ assignment_id }}/table_rows"
+                     hx-trigger="load"
+                     hx-target="#submissions-table-body"
+                     hx-swap="innerHTML">
+              </tbody>
+            </tbody>
+          </table>
+        </div>
       </div>
+
     </div>
   </section>
 </body>
@@ -183,7 +229,6 @@
       }
       addRuleChip(key, op, val);
       valEl.value = '';
-      // 👉 trigger form submit so HTMX serializes inputs into query params
       htmx.trigger(form, 'submit');
     });
   })();

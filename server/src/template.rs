@@ -60,7 +60,7 @@ pub struct SubmissionCard {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub num_web_requests: Option<i64>,
     pub max_severity: String,
-    pub top_domains: Vec<Visit>,
+    pub ai_domains: Vec<Visit>,
 }
 
 #[derive(serde::Serialize)]
@@ -82,14 +82,14 @@ pub fn build_cards(rows: &[SubmissionRow], findings: &[FindingRow]) -> Vec<Submi
     rows.iter().map(|r| {
         let mut fkv: HashMap<String, String> = HashMap::new();
         let mut max_sev = "info".to_string();
-        let mut top_domains = vec![];
+        let mut ai_domains = vec![];
         let mut seen_dom = HashSet::new();
 
         if let Some(fs) = by_sub.get(r.id.as_str()) {
             for f in fs {
                 // keep first value per key
                 fkv.entry(f.key.clone()).or_insert_with(|| f.value.clone());
-                if f.key == "top_domain" {
+                if f.key == "ai_domain" {
                     if let Some(dom) = f.value.split(':').next() {
                         if !seen_dom.insert(dom) { continue; }
                         let mut severity = "info".to_string();
@@ -97,7 +97,7 @@ pub fn build_cards(rows: &[SubmissionRow], findings: &[FindingRow]) -> Vec<Submi
                             severity = "critical".into();
                             max_sev = "critical".into();
                         }
-                        top_domains.push(Visit{ domain: dom.to_string(), severity });
+                        ai_domains.push(Visit{ domain: dom.to_string(), severity });
                     }
                 }
             }
@@ -129,7 +129,7 @@ pub fn build_cards(rows: &[SubmissionRow], findings: &[FindingRow]) -> Vec<Submi
             had_browser,
             num_web_requests,
             max_severity: max_sev,
-            top_domains,
+            ai_domains,
         }
     }).collect()
 }

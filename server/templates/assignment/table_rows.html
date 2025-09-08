@@ -1,0 +1,42 @@
+  {% if cards | length == 0 %}
+    <tr><td colspan="6" class="has-text-grey">No submissions found.</td></tr>
+  {% else %}
+    {% for c in cards %}
+      <tr style="cursor:pointer" onclick="window.location='/admin/submissions/{{ c.id }}'">
+        <td class="nowrap">
+          <span class="is-size-5">{{ c.student_name }}</span>
+        </td>
+        <td class="nowrap" title="{{ c.created_at }}">
+          {{ c.created_at_pretty }}
+        </td>
+        <td class="has-text-right">
+          {% if c.duration_minutes is defined %}{{ c.duration_minutes }}{% else %}—{% endif %}
+        </td>
+        <td class="has-text-right">
+          {% if c.num_web_requests is defined %}{{ c.num_web_requests }}{% else %}—{% endif %}
+        </td>
+        <td class="nowrap">
+          <div class="tags">
+            {# AI domains from card’s top_domains like in cards (critical) #}
+            {% for v in c.ai_domains %}
+                <img width="24" height="24"
+                                class="is-rounded has-background-warning"
+                                style="display:inline-block; padding:3px; border-radius:4px;"
+                                src="https://www.google.com/s2/favicons?domain_url={{ v.domain }}"
+                                alt="{{ v.domain }}" title="AI domains: {{ v.domain }}">
+            {% endfor %}
+
+            {# Also show tags derived from active filters (passed by server) #}
+            {% if filter_tags is defined %}
+              {% for t in filter_tags %}
+                <span class="tag">{{ t }}</span>
+              {% endfor %}
+            {% endif %}
+          </div>
+        </td>
+        <td class="has-text-right">
+          <a class="button is-small" href="/admin/submissions/{{ c.id }}">open</a>
+        </td>
+      </tr>
+    {% endfor %}
+  {% endif %}
