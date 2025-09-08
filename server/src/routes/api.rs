@@ -39,7 +39,7 @@ pub async fn upload_logs(
         meta.moodle_assignment_id.as_deref().unwrap_or(""),
         meta.client_version.as_deref().unwrap_or("client"),
     ).map_err(|e| {
-        log::error!("new_submission failed: {}", e);
+        log::error!("new_submission failed: {e}");
         actix_web::error::ErrorInternalServerError(e)
     })?;
 

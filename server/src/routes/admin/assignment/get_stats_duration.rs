@@ -52,12 +52,12 @@ pub async fn stats_duration(
 fn to_display_time(minutes: &i64) -> String {
     let minutes = *minutes;
     if minutes < 60 {
-        format!("{} min", minutes)
+        format!("{minutes} min")
     } else if minutes < 60 * 24 {
         let hours = minutes as f64 / 60.0;
-        format!("{:.1} hr", hours)
+        format!("{hours:.1} hr")
     } else {
         let days = minutes as f64 / (60.0 * 24.0);
-        format!("{:.1} days", days)
+        format!("{days:.1} days")
     }
 }

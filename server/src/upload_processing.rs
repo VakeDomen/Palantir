@@ -231,7 +231,7 @@ fn analyze_zip(zip_path: PathBuf) -> Result<AnalysisResult, String> {
 
                     let base = base_domain_guess(&host);
                     if !base.contains('.') {
-                        debug!("analyze_zip: suspicious base domain derivation '{}' from host='{}'", base, host);
+                        debug!("analyze_zip: suspicious base domain derivation '{base}' from host='{host}'");
                     }
 
 
@@ -303,11 +303,21 @@ fn analyze_zip(zip_path: PathBuf) -> Result<AnalysisResult, String> {
     };
 
 
-    let final5_net_events = if let (Some(a), Some(b)) =
-        (first_ts.as_deref().and_then(parse_rfc3339), last_ts.as_deref().and_then(parse_rfc3339))
+    let final5_net_events = if let (Some(_a), Some(b)) =
+        (
+            first_ts
+                .as_deref()
+                .and_then(parse_rfc3339), 
+            last_ts
+                .as_deref()
+                .and_then(parse_rfc3339)
+        )
     {
         let cutoff = b - time::Duration::minutes(5);
-        event_ts.iter().filter(|t| **t >= cutoff && **t <= b).count() as i64
+        event_ts
+            .iter()
+            .filter(|t| **t >= cutoff && **t <= b)
+            .count() as i64
     } else {
         0
     };
@@ -320,7 +330,7 @@ fn analyze_zip(zip_path: PathBuf) -> Result<AnalysisResult, String> {
         .map(|(ip, _)| ip.clone());
 
     if let Some(ip) = &seat_ip_opt {
-        debug!("analyze_zip: selected seat_ip={}", ip);
+        debug!("analyze_zip: selected seat_ip={ip}");
     } else {
         debug!("analyze_zip: no private seat_ip detected");
     }
@@ -328,8 +338,9 @@ fn analyze_zip(zip_path: PathBuf) -> Result<AnalysisResult, String> {
 
     // build findings
     let mut findings = Vec::new();
-    let now_rfc3339 =
-        OffsetDateTime::now_utc().format(&Rfc3339).unwrap_or_else(|_| "now".to_string());
+    let now_rfc3339 = OffsetDateTime::now_utc()
+        .format(&Rfc3339)
+        .unwrap_or_else(|_| "now".to_string());
 
     findings.push(Finding {
         kind: KIND_NET.into(),
@@ -400,8 +411,14 @@ fn analyze_zip(zip_path: PathBuf) -> Result<AnalysisResult, String> {
     }
 
     // duration & req/min
-    if let (Some(a), Some(b)) =
-        (first_ts.as_deref().and_then(parse_rfc3339), last_ts.as_deref().and_then(parse_rfc3339))
+    if let (Some(a), Some(b)) = (
+        first_ts
+            .as_deref()
+            .and_then(parse_rfc3339), 
+        last_ts
+            .as_deref()
+            .and_then(parse_rfc3339)
+        )
     {
         let mins = (b - a).whole_minutes().max(0);
         findings.push(Finding {
@@ -561,7 +578,11 @@ fn analyze_zip(zip_path: PathBuf) -> Result<AnalysisResult, String> {
 
     // loopback dominance
     let all_net = src_ips.values().sum::<usize>();
-    let localhost = src_ips.get("127.0.0.1").copied().unwrap_or(0);
+    let localhost = src_ips
+        .get("127.0.0.1")
+        .copied()
+        .unwrap_or(0);
+
     if all_net > 0 && (localhost as f64) / (all_net as f64) > 0.8 {
         findings.push(Finding {
             kind: KIND_ANOMALY.into(),
@@ -594,8 +615,14 @@ fn analyze_zip(zip_path: PathBuf) -> Result<AnalysisResult, String> {
 }
 
 pub fn process_pending(data: &web::Data<AppState>) -> Result<(), String> {
-    let conn = data.pool.get().map_err(|e| e.to_string())?;
-    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+    let conn = data
+        .pool
+        .get()
+        .map_err(|e| e.to_string())?;
+
+    let tx = conn
+        .unchecked_transaction()
+        .map_err(|e| e.to_string())?;
 
     let sub: Option<(String, String)> = tx
         .query_row(

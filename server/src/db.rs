@@ -274,15 +274,13 @@ pub fn list_findings_for_submissions(
         return Ok(vec![]);
     }
     // build a dynamic IN clause safely
-    let placeholders = std::iter::repeat("?")
-        .take(submission_ids.len())
+    let placeholders = std::iter::repeat_n("?", submission_ids.len())
         .collect::<Vec<_>>()
         .join(", ");
     let sql = format!(
         "SELECT submission_ref, kind, key, value
          FROM findings
-         WHERE submission_ref IN ({})",
-        placeholders
+         WHERE submission_ref IN ({placeholders})"
     );
 
     let conn = pool.get().map_err(|e| e.to_string())?;

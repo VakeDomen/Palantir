@@ -29,7 +29,7 @@ pub async fn submission_artifacts_frag(
     for f in findings.iter().cloned() {
         by_kind.entry(f.kind.clone()).or_default().push(f);
     }
-    println!("by_kind: {:#?}", by_kind);
+    println!("by_kind: {by_kind:#?}");
     
     ctx.insert("logs", &logs);
     ctx.insert("by_kind", &by_kind);

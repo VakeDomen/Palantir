@@ -32,7 +32,7 @@ fn parse_card_query(req: &HttpRequest) -> CardQuery {
             "filters" | "filters[]" => {
                 match serde_json::from_str::<FilterItem>(&v) {
                     Ok(f) => filters.push(f),
-                    Err(e) => log::warn!("bad filter JSON '{}': {}", v, e),
+                    Err(e) => log::warn!("bad filter JSON '{v}': {e}"),
                 }
             }
             _ => {}
@@ -104,7 +104,7 @@ pub async fn assignment_cards(
 ) -> impl Responder {
     let aid = path.into_inner();
     let cq = parse_card_query(&req);
-    log::debug!("CardQuery parsed: {:?}", cq);
+    log::debug!("CardQuery parsed: {cq:?}");
 
     // base query
     let mut sql = String::from(
@@ -116,7 +116,7 @@ pub async fn assignment_cards(
 
     if let Some(q) = cq.q.as_ref() {
         sql.push_str(" AND s.student_name LIKE ?");
-        args.push(format!("%{}%", q).into());
+        args.push(format!("%{q}%").into());
     }
 
     build_where_for_filters(&mut sql, &mut args, &cq.filters);
@@ -142,7 +142,9 @@ pub async fn assignment_cards(
     let mut subs = Vec::new();
     if let Ok(it) = rows {
         for row in it {
-            if let Ok(s) = row { subs.push(s); }
+            if let Ok(s) = row { 
+                subs.push(s); 
+            }
         }
     }
 
@@ -195,7 +197,7 @@ pub async fn assignment_table_rows(
 
     if let Some(q) = cq.q.as_ref().filter(|s| !s.trim().is_empty()) {
         sql.push_str(" AND s.student_name LIKE ?");
-        args.push(format!("%{}%", q).into());
+        args.push(format!("%{q}%").into());
     }
 
     build_where_for_filters(&mut sql, &mut args, &cq.filters);

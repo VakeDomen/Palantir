@@ -36,14 +36,14 @@ pub async fn do_login(form: web::Form<LoginForm>, session: Session) -> impl Resp
             HttpResponse::Found().append_header(("Location", "/admin")).finish()
         }
         Ok(Ok(None)) => HttpResponse::Unauthorized().body("invalid credentials"),
-        Ok(Err(e)) => HttpResponse::Unauthorized().body(format!("login failed: {}", e)),
-        Err(e) => HttpResponse::InternalServerError().body(format!("worker error: {}", e)),
+        Ok(Err(e)) => HttpResponse::Unauthorized().body(format!("login failed: {e}")),
+        Err(e) => HttpResponse::InternalServerError().body(format!("worker error: {e}")),
     }
 }
 
 #[get("/admin/logout")]
 pub async fn logout(session: Session) -> impl Responder {
-    let _ = session.purge();
+    session.purge();
     HttpResponse::Found().append_header(("Location", "/admin/login")).finish()
 }
 
@@ -61,7 +61,7 @@ fn ldap_login_blocking(username: String, password: String) -> Result<Option<Stri
 
     if let (Some(dn), Some(pw)) = (bind_dn.as_deref(), bind_pw.as_deref()) {
         ldap.simple_bind(dn, pw).map_err(|e| e.to_string())?
-            .success().map_err(|e| format!("{:?}", e))?;
+            .success().map_err(|e| format!("{e:?}"))?;
     }
 
     let filter = format!("({}={})", user_attr, ldap_escape(&username));
@@ -69,7 +69,7 @@ fn ldap_login_blocking(username: String, password: String) -> Result<Option<Stri
         .search(&base_dn, Scope::Subtree, &filter, vec!["cn", "sn", "mail"])
         .map_err(|e| e.to_string())?
         .success()
-        .map_err(|e| format!("{:?}", e))?;
+        .map_err(|e| format!("{e:?}"))?;
 
     let first = match rs.into_iter().next() {
         Some(e) => e,
@@ -102,7 +102,7 @@ fn ldap_escape(s: &str) -> String {
 fn is_authorized(req: &HttpRequest) -> bool {
     let session = actix_session::SessionExt::get_session(req);
     let session = session.get::<String>("prof").ok().flatten();
-    print!("auth check: {:?}\n", session);
+    println!("auth check: {session:?}");
     session.is_some()
 }
 

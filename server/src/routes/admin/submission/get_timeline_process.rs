@@ -150,7 +150,7 @@ pub async fn proc_timeline_json(
 
     // build payload
     let local = UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC);
-    let to_ms = |dt: OffsetDateTime| (dt.to_offset(local).unix_timestamp_nanos() / 1_000_000) as i128;
+    let to_ms = |dt: OffsetDateTime| (dt.to_offset(local).unix_timestamp_nanos() / 1_000_000);
 
     let labels: Vec<String> = rows_tmp.iter().map(|x| x.0.clone()).collect();
     let mut rows: Vec<ProcRow> = Vec::new();

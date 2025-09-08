@@ -55,6 +55,6 @@ pub async fn stats_domains(
     ctx.insert("hits_json", &hits_json);
 
     let html = data.tera.render("assignment/stats_domains.html", &ctx).unwrap();
-    return HttpResponse::Ok().body(html);
+    HttpResponse::Ok().body(html)
 
 }

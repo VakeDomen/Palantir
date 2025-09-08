@@ -52,7 +52,7 @@ pub async fn net_timeline_json(
         },
     ) {
         Ok(r) => r,
-        Err(e) => return HttpResponse::InternalServerError().body(format!("query: {}", e))
+        Err(e) => return HttpResponse::InternalServerError().body(format!("query: {e}"))
     };
 
     // now open from processed_uploads
@@ -65,7 +65,7 @@ pub async fn net_timeline_json(
 
     let mut zip = match ZipArchive::new(file) {
         Ok(zip) => zip,
-        Err(e) => return HttpResponse::InternalServerError().body(format!("zip: {}", e))
+        Err(e) => return HttpResponse::InternalServerError().body(format!("zip: {e}"))
     };
 
 
@@ -109,9 +109,8 @@ pub async fn net_timeline_json(
         };
         let minute_key = match OffsetDateTime::parse(ts, &Rfc3339)
             .map(|dt| dt.to_offset(local))
-            .ok()
-            .and_then(|dt| Some(format!("{:04}-{:02}-{:02} {:02}:{:02}",
-                dt.year(), dt.month() as u8, dt.day(), dt.hour(), dt.minute())))
+            .ok().map(|dt| format!("{:04}-{:02}-{:02} {:02}:{:02}",
+                dt.year(), dt.month() as u8, dt.day(), dt.hour(), dt.minute()))
         {
             Some(k) => k,
             None => { line.clear(); continue; }
@@ -128,20 +127,32 @@ pub async fn net_timeline_json(
     // compute MA(100) over total
     let mut out: Vec<Point> = Vec::with_capacity(buckets.len());
     for (t, (tot, ai)) in buckets {
-        out.push(Point { t, total: tot, ai, ma100: 0.0 });
+        out.push(Point { 
+            t, 
+            total: tot, 
+            ai, 
+            ma100: 0.0 
+        });
     }
     let w = 100usize;
     if !out.is_empty() {
         let mut acc: i64 = 0;
         let mut q: std::collections::VecDeque<i32> = std::collections::VecDeque::new();
-        for i in 0..out.len() {
-            acc += out[i].total as i64;
-            q.push_back(out[i].total);
+        for item in &mut out {
+            
+            acc += item.total as i64;
+            q.push_back(item.total);
+            
             if q.len() > w {
                 acc -= q.pop_front().unwrap() as i64;
             }
+            
             let denom = q.len() as f32;
-            out[i].ma100 = if denom > 0.0 { (acc as f32) / denom } else { 0.0 };
+            item.ma100 = if denom > 0.0 { 
+                (acc as f32) / denom 
+            } else { 
+                0.0 
+            };
         }
     }
 
