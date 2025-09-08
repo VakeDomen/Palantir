@@ -4,7 +4,7 @@ use actix_web::{get, web, HttpResponse, Responder};
 use serde::Serialize;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime, UtcOffset};
 
-use crate::routes::admin::util::{consts::{CHEAT_HIGHLIGHT_PROCS, SYSTEM_HIDE_PROCS}, point::Point, zip::open_processed_zip_by_submission};
+use crate::routes::{admin::util::{consts::{CHEAT_HIGHLIGHT_PROCS, SYSTEM_HIDE_PROCS}, point::Point, zip::open_processed_zip_by_submission}, auth::Authorized};
 
 
 #[derive(Serialize)]
@@ -32,6 +32,7 @@ struct ProcPayload {
 
 #[get("/admin/submissions/{id}/proc_timeline")]
 pub async fn proc_timeline_fragment(
+    _: Authorized,
     data: web::Data<crate::AppState>,
     path: web::Path<String>
 ) -> impl Responder {
@@ -50,6 +51,7 @@ pub async fn proc_timeline_fragment(
 
 #[get("/admin/submissions/{id}/proc_timeline.json")]
 pub async fn proc_timeline_json(
+    _: Authorized,
     data: web::Data<crate::AppState>,
     path: web::Path<String>,
 ) -> impl Responder {

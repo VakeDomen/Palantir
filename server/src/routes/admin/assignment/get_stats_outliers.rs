@@ -1,5 +1,6 @@
 use actix_web::{get, web, HttpResponse, Responder};
 
+use crate::routes::auth::Authorized;
 use crate::AppState;
 use crate::routes::admin::util::consts::OUTLIER_MIN_FLAG_PERCENTILE;
 
@@ -14,7 +15,11 @@ struct NetOut {
 }
 
 #[get("/admin/assignment/{aid}/stats_outliers")]
-pub async fn stats_outliers(data: web::Data<AppState>, path: web::Path<String>) -> impl Responder {
+pub async fn stats_outliers(
+    _: Authorized,
+    data: web::Data<AppState>, 
+    path: web::Path<String>
+) -> impl Responder {
     use rusqlite::params;
 
     let aid = path.into_inner();

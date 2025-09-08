@@ -2,28 +2,23 @@ use actix_session::Session;
 use actix_web::{get, web, HttpResponse, Responder};
 use tera::Context;
 
-use crate::{db, template, AppState};
+use crate::{db, routes::auth::Authorized, template, AppState};
 
 
 
 #[get("/admin")]
-pub async fn admin_root() -> impl Responder {
+pub async fn admin_root(_: Authorized) -> impl Responder {
     HttpResponse::Found()
         .append_header(("Location", "/admin/dashboard"))
         .finish()
 }
 
 #[get("/admin/dashboard")]
-pub async fn dashboard(session: Session, data: web::Data<AppState>) -> impl Responder {
-    if session.get::<String>("prof")
-        .ok()
-        .flatten()
-        .is_none() 
-    {
-        return HttpResponse::Found()
-            .append_header(("Location", "/admin/login"))
-            .finish();
-    }
+pub async fn dashboard(
+    _: Authorized, 
+    session: Session, 
+    data: web::Data<AppState>
+) -> impl Responder {
     let prof = session.get::<String>("prof")
         .unwrap()
         .unwrap();

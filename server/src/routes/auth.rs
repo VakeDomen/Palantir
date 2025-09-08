@@ -1,5 +1,6 @@
-use actix_web::{get, post, web, HttpResponse, Responder};
+use actix_web::{dev::{forward_ready, Payload, Service, ServiceRequest, ServiceResponse}, error::ErrorUnauthorized, get, guard::GuardContext, http::header, middleware::Next, post, web::{self, Redirect}, Error, FromRequest, HttpRequest, HttpResponse, Responder};
 use actix_session::Session;
+use futures_util::future::LocalBoxFuture;
 use ldap3::{LdapConn, Scope, SearchEntry};
 use serde::Deserialize;
 
@@ -97,4 +98,33 @@ fn ldap_escape(s: &str) -> String {
         '\0' => "\\00".chars().collect(),
         _    => vec![c],
     }).collect()
+}
+
+fn is_authorized(req: &HttpRequest) -> bool {
+    let session = actix_session::SessionExt::get_session(req);
+    let session = session.get::<String>("prof").ok().flatten();
+    print!("auth check: {:?}\n", session);
+    session.is_some()
+}
+
+pub struct Authorized;
+
+use futures_util::future::{ready, Ready};
+
+impl FromRequest for Authorized {
+    type Error = Error;
+    type Future = Ready<Result<Self, Error>>;
+
+    fn from_request(req: &HttpRequest, _: &mut Payload) -> Self::Future {
+        if is_authorized(req) {
+            ready(Ok(Authorized))
+        } else {
+            // Redirect to /admin/login instead of returning Unauthorized
+            let resp = HttpResponse::Found()
+                .append_header(("Location", "/admin/login"))
+                .finish();
+            let err = actix_web::error::InternalError::from_response("Unauthorized", resp).into();
+            ready(Err(err))
+        }
+    }
 }

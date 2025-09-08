@@ -1,20 +1,15 @@
 use actix_session::Session;
 use actix_web::{get, web, HttpResponse, Responder};
 
-use crate::{db, template, AppState};
+use crate::{db, routes::auth::Authorized, template, AppState};
 
 
 #[get("/admin/submissions/{id}")]
 pub async fn submission_page(
-    session: Session,
+    _: Authorized,
     data: web::Data<AppState>,
     path: web::Path<String>,
 ) -> impl Responder {
-    if session.get::<String>("prof").ok().flatten().is_none() {
-        return actix_web::HttpResponse::Found()
-            .append_header(("Location", "/admin/login"))
-            .finish();
-    }
     let id = path.into_inner();
 
     match db::get_submission_detail(&data.pool, &id) {

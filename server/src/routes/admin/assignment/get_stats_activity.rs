@@ -2,11 +2,15 @@ use actix_web::{get, web, HttpResponse, Responder};
 use rusqlite::params;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime, UtcOffset};
 
-use crate::AppState;
+use crate::{routes::auth::Authorized, AppState};
 
 
 #[get("/admin/assignment/{aid}/stats_activity")]
-pub async fn stats_activity(data: web::Data<AppState>, path: web::Path<String>) -> impl Responder {
+pub async fn stats_activity(
+    _: Authorized,
+    data: web::Data<AppState>, 
+    path: web::Path<String>
+) -> impl Responder {
     let aid = path.into_inner();
     let conn = match data.pool.get() { Ok(c) => c, Err(e)=>return HttpResponse::InternalServerError().body(e.to_string()) };
     let mut stmt = conn.prepare(

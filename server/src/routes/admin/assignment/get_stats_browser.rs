@@ -1,10 +1,14 @@
 use actix_web::{get, web, HttpResponse, Responder};
 use rusqlite::params;
 
-use crate::AppState;
+use crate::{routes::auth::Authorized, AppState};
 
 #[get("/admin/assignment/{aid}/stats_browser")]
-pub async fn stats_browser(data: web::Data<AppState>, path: web::Path<String>) -> impl Responder {
+pub async fn stats_browser(
+    _: Authorized,
+    data: web::Data<AppState>, 
+    path: web::Path<String>
+) -> impl Responder {
     let aid = path.into_inner();
     let conn = data.pool.get().unwrap();
 

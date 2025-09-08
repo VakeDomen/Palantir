@@ -3,15 +3,20 @@ use actix_web::{post, web, HttpResponse, Responder};
 use serde::Deserialize;
 use time::OffsetDateTime;
 
-use crate::{db, AppState};
+use crate::{db, routes::auth::Authorized, AppState};
 
 #[derive(Deserialize)]
 pub struct SubForm { pub assignment_id: String }
 
 
 #[post("/admin/subscribe")]
-pub async fn subscribe(session: Session, data: web::Data<AppState>, form: web::Form<SubForm>) -> impl Responder {
-    if session.get::<String>("prof").ok().flatten().is_none() { return HttpResponse::Unauthorized().finish(); }
+pub async fn subscribe(
+    _: Authorized, 
+    session: Session,
+    data: web::Data<AppState>, 
+    form: web::Form<SubForm>
+) -> impl Responder {
+    
     let prof = session.get::<String>("prof").unwrap().unwrap();
     let aid = form.assignment_id.trim().to_string();
     let now = OffsetDateTime::now_utc().format(&time::format_description::well_known::Rfc3339).unwrap();

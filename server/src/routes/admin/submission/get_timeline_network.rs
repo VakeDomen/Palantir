@@ -5,12 +5,13 @@ use rusqlite::params;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime, UtcOffset};
 use zip::ZipArchive;
 
-use crate::{routes::admin::util::point::Point, AppState};
+use crate::{routes::{admin::util::point::Point, auth::Authorized}, AppState};
 
 
 
 #[get("/admin/submissions/{id}/net_timeline")]
 pub async fn net_timeline_fragment(
+    _: Authorized,
     data: web::Data<AppState>,
     path: web::Path<String>
 ) -> impl Responder {

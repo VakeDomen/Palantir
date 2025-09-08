@@ -3,13 +3,17 @@ use std::io::BufRead;
 use actix_web::{get, web, HttpResponse, Responder};
 use rusqlite::params;
 
-use crate::{routes::admin::util::zip::open_processed_zip_by_submission, AppState};
+use crate::{routes::{admin::util::zip::open_processed_zip_by_submission, auth::Authorized}, AppState};
 
 
 
 
 #[get("/admin/assignment/{aid}/stats_shared_lan")]
-pub async fn stats_shared_lan(data: web::Data<AppState>, path: web::Path<String>) -> impl Responder {
+pub async fn stats_shared_lan(
+    _: Authorized,
+    data: web::Data<AppState>, 
+    path: web::Path<String>
+) -> impl Responder {
     let aid = path.into_inner();
     let conn = data.pool.get().unwrap();
 

@@ -2,11 +2,16 @@ use actix_session::Session;
 use actix_web::{post, web, HttpResponse, Responder};
 
 
-use crate::{db, routes::admin::subscribe::SubForm, AppState};
+use crate::{db, routes::{admin::subscribe::SubForm, auth::Authorized}, AppState};
 
 #[post("/admin/unsubscribe")]
-pub async fn unsubscribe(session: Session, data: web::Data<AppState>, form: web::Form<SubForm>) -> impl Responder {
-    if session.get::<String>("prof").ok().flatten().is_none() { return HttpResponse::Unauthorized().finish(); }
+pub async fn unsubscribe(
+    _: Authorized,
+    session: Session, 
+    data: web::Data<AppState>, 
+    form: web::Form<SubForm>
+) -> impl Responder {
+    
     let prof = session.get::<String>("prof").unwrap().unwrap();
     let aid = form.assignment_id.trim().to_string();
 

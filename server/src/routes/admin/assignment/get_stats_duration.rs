@@ -1,9 +1,13 @@
 use actix_web::{get, web, HttpResponse, Responder};
 
-use crate::{db::fetch_durations_minutes, AppState};
+use crate::{db::fetch_durations_minutes, routes::auth::Authorized, AppState};
 
 #[get("/admin/assignment/{aid}/stats_duration")]
-pub async fn stats_duration(data: web::Data<AppState>, path: web::Path<String>) -> impl Responder {
+pub async fn stats_duration(
+    _: Authorized,
+    data: web::Data<AppState>, 
+    path: web::Path<String>
+) -> impl Responder {
     let aid = path.into_inner();
     let conn = data.pool.get().unwrap();
     let vals = fetch_durations_minutes(&conn, &aid);

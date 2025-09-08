@@ -1,11 +1,16 @@
 use actix_session::Session;
 use actix_web::{get, web, HttpResponse, Responder};
 
-use crate::{db, template, AppState};
+use crate::{db, routes::auth::Authorized, template, AppState};
 
 
 #[get("/admin/assignment/{aid}")]
-pub async fn assignment_page(session: Session, data: web::Data<AppState>, path: web::Path<String>) -> impl Responder {
+pub async fn assignment_page(
+    _: Authorized,
+    session: Session, 
+    data: web::Data<AppState>, 
+    path: web::Path<String>
+) -> impl Responder {
     if session.get::<String>("prof").ok().flatten().is_none() {
         return HttpResponse::Found().append_header(("Location", "/admin/login")).finish();
     }

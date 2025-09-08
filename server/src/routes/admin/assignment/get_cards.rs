@@ -3,7 +3,7 @@ use rusqlite::types::Value;
 use url::form_urlencoded;
 use serde::Deserialize;
 
-use crate::{db::list_findings_for_submissions, routes::admin::util::consts::{ALLOWED_KEYS_BOOL, ALLOWED_KEYS_NUM, ALLOWED_OPS}, template, AppState};
+use crate::{db::list_findings_for_submissions, routes::{admin::util::consts::{ALLOWED_KEYS_BOOL, ALLOWED_KEYS_NUM, ALLOWED_OPS}, auth::Authorized}, template, AppState};
 
 #[derive(Debug)]
 struct CardQuery {
@@ -97,6 +97,7 @@ fn build_where_for_filters(
 
 #[get("/admin/assignment/{aid}/cards")]
 pub async fn assignment_cards(
+    _: Authorized,
     data: web::Data<AppState>,
     path: web::Path<String>,
     req: HttpRequest,
@@ -177,6 +178,7 @@ fn pretty_filter_tag(f: &FilterItem) -> String {
 
 #[get("/admin/assignment/{aid}/table_rows")]
 pub async fn assignment_table_rows(
+    _: Authorized,
     data: web::Data<AppState>,
     path: web::Path<String>,
     req: HttpRequest,
@@ -244,6 +246,7 @@ pub async fn assignment_table_rows(
 
 #[get("/admin/assignment/{aid}/table")]
 pub async fn assignment_table_page(
+    _: Authorized,
     data: web::Data<AppState>,
     path: web::Path<String>,
     req: HttpRequest,

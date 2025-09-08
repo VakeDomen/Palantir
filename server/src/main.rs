@@ -80,6 +80,7 @@ async fn main() -> std::io::Result<()> {
                 .build())
             .service(actix_files::Files::new("/favicon.ico", "./static/favicon.png"))
             .service(actix_files::Files::new("/static", "./static").show_files_listing())
+            // .service(actix_files::Files::new("/uploads", "./processed_uploads"))
             .service(auth::login_page)
             .service(auth::do_login)
             .service(auth::logout)

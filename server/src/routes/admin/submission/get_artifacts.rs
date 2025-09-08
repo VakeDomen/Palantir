@@ -2,10 +2,11 @@ use std::collections::HashMap;
 
 // src/routes/admin.rs (or routes/submission.rs)
 use actix_web::{get, web, HttpResponse, Responder};
-use crate::{db::{self, FindingRow}, AppState};
+use crate::{db::{self, FindingRow}, routes::auth::Authorized, AppState};
 
 #[get("/admin/submissions/{id}/artifacts")]
 pub async fn submission_artifacts_frag(
+    _: Authorized,
     data: web::Data<AppState>,
     path: web::Path<String>,
 ) -> impl Responder {
