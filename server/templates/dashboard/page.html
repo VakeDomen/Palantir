@@ -9,13 +9,9 @@
   <div class="container">
      <section class="section">
       <div class="container">
-        <div class="columns is-variable is-6">
-          <div class="column is-8-desktop is-10-tablet is-12-mobile">
+        <div class="columns is-variable is-12">
+          <div class="column is-12-desktop is-12-tablet is-12-mobile">
             <div class="box" style="border-radius: 1rem;">
-              <div class="is-flex is-justify-content-space-between is-align-items-center mb-4">
-                <h2 class="title is-4 mb-0">Dashboard</h2>
-                <span class="is-size-7 has-text-grey">Manage your assignment feeds</span>
-              </div>
 
               <!-- Subscribe form -->
               <form
@@ -47,9 +43,6 @@
                   <div class="control">
                     <button type="submit" class="button">Subscribe</button>
                   </div>
-                  <div class="control">
-                    <button type="reset" class="button">Clear</button>
-                  </div>
                 </div>
               </form>
 
@@ -57,22 +50,6 @@
               <div id="subs">
                 {% include "dashboard/assignment_list.html" %}
               </div>
-            </div>
-          </div>
-
-          <!-- Optional side panel: quick tips / status -->
-          <div class="column is-4-desktop is-hidden-touch">
-            <div class="box" style="border-radius: 1rem;">
-              <h3 class="title is-6">Tips</h3>
-              <ul class="content is-small">
-                <li>Use the assignment id from the student manifest.</li>
-                <li>Click an assignment to view all recent submissions.</li>
-                <li>Unsubscribe anytime from the list actions.</li>
-              </ul>
-              <hr>
-              <p class="is-size-7 has-text-grey">
-                Need help? Contact the course admin.
-              </p>
             </div>
           </div>
         </div>
