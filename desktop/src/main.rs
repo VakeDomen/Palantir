@@ -232,6 +232,7 @@ impl Application for PalantirApp {
                 let logs_task = async move {
                     let zip_path = zip_snapshot("/var/tmp/", &manifest)?;
                     let receipt = upload_logs(&server_base, &manifest, &zip_path).await?;
+                    println!("logs uploaded, receipt {}", receipt);
                     Ok::<String, String>(receipt)
                 };
 
@@ -251,11 +252,11 @@ impl Application for PalantirApp {
             Msg::FinishedMain(res) => {
                 match res {
                     Ok(r) => {
-                        self.status = format!("✅ {}", r);
+                        self.status = format!("{}", r);
                         self.progress_main = 1.0;
                     }
                     Err(e) => {
-                        self.status = format!("❌ {}", e);
+                        self.status = format!("{}", e);
                         self.progress_main = 1.0;
                     }
                 }
@@ -686,6 +687,8 @@ async fn upload_logs(server_base: &str, manifest: &Manifest, zip_path: &Path) ->
         urlencoding::encode(&manifest.client_version),
     );
 
+    println!("uploading logs to {}", url);
+
     let file_part = reqwest::multipart::Part::stream(tokio::fs::read(zip_path).await.map_err(|e| e.to_string())?)
         .file_name(
             zip_path
@@ -700,6 +703,7 @@ async fn upload_logs(server_base: &str, manifest: &Manifest, zip_path: &Path) ->
     let client = reqwest::Client::new();
     let res = client.post(url).multipart(form).send().await.map_err(|e| e.to_string())?;
     if !res.status().is_success() {
+        println!("response: {:#?}", res);
         return Err(format!("server error {}", res.status()));
     }
     let v: serde_json::Value = res.json().await.map_err(|e| e.to_string())?;
