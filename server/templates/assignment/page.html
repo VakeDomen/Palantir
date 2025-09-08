@@ -38,9 +38,9 @@
           <div class="box">Loading browsers…</div>
         </div>
 
-        <div hx-get="/admin/assignment/{{ assignment_id }}/stats_domains" hx-trigger="load" hx-swap="outerHTML">
+        <!-- <div hx-get="/admin/assignment/{{ assignment_id }}/stats_domains" hx-trigger="load" hx-swap="outerHTML">
           <div class="box">Loading domains…</div>
-        </div>
+        </div> -->
 
         <div hx-get="/admin/assignment/{{ assignment_id }}/stats_outliers" hx-trigger="load" hx-swap="outerHTML">
           <div class="box">Scanning for outliers…</div>
@@ -120,8 +120,6 @@
               <tr>
                 <th class="nowrap">Student</th>
                 <th class="nowrap">Submitted</th>
-                <th class="has-text-right nowrap">Duration (min)</th>
-                <th class="has-text-right nowrap">Requests</th>
                 <th class="nowrap">Tags</th>
                 <th class="has-text-right"></th>
               </tr>

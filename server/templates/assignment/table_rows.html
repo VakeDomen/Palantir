@@ -9,12 +9,6 @@
         <td class="nowrap" title="{{ c.created_at }}">
           {{ c.created_at_pretty }}
         </td>
-        <td class="has-text-right">
-          {% if c.duration_minutes is defined %}{{ c.duration_minutes }}{% else %}—{% endif %}
-        </td>
-        <td class="has-text-right">
-          {% if c.num_web_requests is defined %}{{ c.num_web_requests }}{% else %}—{% endif %}
-        </td>
         <td class="nowrap">
           <div class="tags">
             {# AI domains from card’s top_domains like in cards (critical) #}

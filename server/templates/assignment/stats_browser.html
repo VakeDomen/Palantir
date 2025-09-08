@@ -1,7 +1,10 @@
 <div class="column is-6">
   <div class="">
-    <p class="is-size-6 has-text-weight-semibold mb-2">Browser usage</p>
+    <!-- <p class="is-size-6 has-text-weight-semibold mb-2">Browser usage</p> -->
+    <p>{{ has }} of {{ total }} submissions had a <b>browser open</b></p>
     <progress class="progress is-small is-warning" value="{{ has }}" max="{{ total }}"></progress>
-    <p>{{ has }} of {{ total }} submissions had a browser open</p>
+
+    <p>{{ ai_has }} of {{ total }} submissions accessed remote <b>AI endpoint</b></p>
+    <progress class="progress is-small is-warning" value="{{ ai_has }}" max="{{ total }}"></progress>
   </div>
 </div>
