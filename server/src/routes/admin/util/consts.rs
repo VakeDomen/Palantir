@@ -221,6 +221,46 @@ pub const FK_SEARCH_HITS: &str     = "search_hits";     // visits to search engi
 pub const FK_PKG_HITS: &str        = "pkg_hits";        // requests to package registries (PyPI, npm, crates.io, etc.)
 pub const FK_CLOUD_HITS: &str      = "cloud_hits";      // uploads/downloads to cloud storage/file sharing services
 
+
+// Which keys can be filtered as numbers (CAST(value AS INTEGER))
+pub const ALLOWED_KEYS_NUM: &[&str] = &[
+    // session & intensity
+    FK_DURATION_MINUTES,
+    FK_REQUESTS_PER_MIN,
+    FK_TOTAL_NET_EVENTS,
+    FK_UNIQUE_DOMAINS,
+    FK_BURST_MAX_EVENTS_PER_MIN,
+    FK_FINAL5_NET_EVENTS,
+
+    // proc counts
+    FK_TOTAL_PROC_STARTS,
+    FK_TOTAL_PROC_STOPS,
+    FK_BROWSER_RUNTIME_SECONDS,
+    FK_SHELL_INVOCATIONS,
+    FK_EXTERNAL_DOWNLOAD_TOOL_COUNT,
+
+    // AI / categories
+    FK_AI_HITS_TOTAL,
+    FK_AI_RATIO_PERCENT,   // percent stored as number
+    FK_QNA_HITS,
+    FK_CODE_HOST_HITS,
+    FK_SEARCH_HITS,
+    FK_PKG_HITS,
+    FK_CLOUD_HITS,
+];
+
+// Which keys can be filtered as booleans (value ~ true/false/1/0/yes/no)
+pub const ALLOWED_KEYS_BOOL: &[&str] = &[
+    FK_HAD_BROWSER,
+    FK_REMOTE_COLLAB_TOOL_SEEN,
+    FK_SSH_ACTIVITY,
+    // (loopback_dominated is "X/Y" string -> not boolean)
+];
+
+// Supported operators
+pub const ALLOWED_OPS: &[&str] = &["gt","ge","eq","le","lt","ne","exists"];
+
+
 /// System-ish noise we hide by default in the process timeline.
 pub const SYSTEM_HIDE_PROCS: &[&str] = &[
     "(sd-pam)",

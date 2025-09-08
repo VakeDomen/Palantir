@@ -2,7 +2,7 @@ use tera::{Context, Tera};
 use time::{format_description::{self, well_known::Rfc3339}, OffsetDateTime, UtcOffset};
 
 
-use crate::{db::{FindingRow, LogRow, SubmissionDetail, SubmissionRow}, routes::admin::util::consts::AI_PROVIDER_BASES};
+use crate::{db::{FindingRow, LogRow, SubmissionDetail, SubmissionRow}, routes::admin::util::consts::{AI_PROVIDER_BASES, ALLOWED_KEYS_BOOL, ALLOWED_KEYS_NUM, ALLOWED_OPS}};
 
 #[derive(Debug)]
 pub struct RenderError(pub String);
@@ -41,6 +41,9 @@ pub fn assignment_cards_page(
     let mut ctx = Context::new();
     ctx.insert("assignment_id", &assignment_id);
     ctx.insert("cards", &cards);
+    ctx.insert("allowed_keys_num", &ALLOWED_KEYS_NUM);
+    ctx.insert("allowed_keys_bool", &ALLOWED_KEYS_BOOL);
+    ctx.insert("allowed_ops", &ALLOWED_OPS);
     Ok(tera.render("assignment/page.html", &ctx)?)
 }
 

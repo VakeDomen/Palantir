@@ -3,7 +3,7 @@ use rusqlite::types::Value;
 use url::form_urlencoded;
 use serde::Deserialize;
 
-use crate::{db::list_findings_for_submissions, template, AppState};
+use crate::{db::list_findings_for_submissions, routes::admin::util::consts::{ALLOWED_KEYS_BOOL, ALLOWED_KEYS_NUM, ALLOWED_OPS}, template, AppState};
 
 #[derive(Debug)]
 struct CardQuery {
@@ -41,12 +41,6 @@ fn parse_card_query(req: &HttpRequest) -> CardQuery {
 
     CardQuery { q, filters }
 }
-
-const ALLOWED_KEYS_NUM: &[&str] = &[
-    "requests_per_min","total_net_events","duration_minutes","ai_hits_total"
-];
-const ALLOWED_KEYS_BOOL: &[&str] = &["had_browser"];
-const ALLOWED_OPS: &[&str] = &["gt","ge","eq","le","lt","ne","exists"];
 
 fn build_where_for_filters(
     qb: &mut String,
